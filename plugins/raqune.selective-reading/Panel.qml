@@ -15,6 +15,7 @@ Panel {
   readonly property string cliPath: Quickshell.env("HOME") + "/.local/bin/selective-reading"
 
   property bool isPlaying: false
+  property bool isPaused: false
   property string currentVoice: "en-US-JennyNeural"
   property string currentVoiceName: "Jenny"
   property string currentRate: "+0%"
@@ -50,6 +51,7 @@ Panel {
       try {
         var data = JSON.parse(text())
         root.isPlaying = Boolean(data.isPlaying)
+        root.isPaused = Boolean(data.isPaused)
         if (data.voice) root.currentVoice = String(data.voice)
         if (data.voiceName) root.currentVoiceName = String(data.voiceName)
         if (data.rate) root.currentRate = String(data.rate)
@@ -86,14 +88,20 @@ Panel {
     Util.execArgv([root.cliPath, "toggle"])
   }
 
+  function triggerPause() {
+    Util.execArgv([root.cliPath, "pause"])
+  }
+
   BarIconButton {
     id: button
     anchors.fill: parent
     bar: root.bar
     slotSize: Style.bar.statusSlot
     tooltipText: root.isPlaying
-      ? ("Selective Reading: Speaking (" + root.neutralizeMarkup(root.currentVoiceName) + ")")
-      : ("Selective Reading: " + root.neutralizeMarkup(root.currentVoiceName) + " [SUPER+R]")
+      ? (root.isPaused
+          ? ("Selective Reading: Paused (" + root.neutralizeMarkup(root.currentVoiceName) + ") [SUPER+R]")
+          : ("Selective Reading: Speaking (" + root.neutralizeMarkup(root.currentVoiceName) + ") [SUPER+R to pause]"))
+      : ("Selective Reading: " + root.neutralizeMarkup(root.currentVoiceName) + " [SUPER+SHIFT+R]")
     iconComponent: Component {
       Image {
         cache: false
@@ -135,9 +143,9 @@ Panel {
           width: parent.width
           title: "Selective Reading"
           meta: root.isPlaying
-            ? ("SPEAKING • " + root.neutralizeMarkup(root.currentVoiceName).toUpperCase())
-            : ("VOICE: " + root.neutralizeMarkup(root.currentVoiceName).toUpperCase() + " • SUPER+R")
-          detail: root.isPlaying ? "LIVE" : root.neutralizeMarkup(root.currentRate)
+            ? ((root.isPaused ? "PAUSED • " : "SPEAKING • ") + root.neutralizeMarkup(root.currentVoiceName).toUpperCase())
+            : ("VOICE: " + root.neutralizeMarkup(root.currentVoiceName).toUpperCase() + " • SUPER+SHIFT+R")
+          detail: root.isPlaying ? (root.isPaused ? "PAUSED" : "LIVE") : root.neutralizeMarkup(root.currentRate)
           foreground: Commons.Color.foreground
           iconComponent: Component {
             Image {
@@ -159,8 +167,16 @@ Panel {
           Button {
             text: "Read Selected Text"
             bordered: true
-            selected: root.isPlaying
+            selected: root.isPlaying && !root.isPaused
             onClicked: root.triggerRead()
+          }
+
+          Button {
+            text: root.isPaused ? "Resume" : "Pause"
+            bordered: true
+            selected: root.isPaused
+            enabled: root.isPlaying
+            onClicked: root.triggerPause()
           }
 
           Button {

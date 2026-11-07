@@ -36,17 +36,18 @@ fi
 cp -f "${REPO_DIR}/config/shell.json" "${SHELL_JSON}"
 echo "  [+] Applied bar layout to ${SHELL_JSON}"
 
-# 5. Ensure SUPER + R keybinding for Selective Reading is in ~/.config/hypr/bindings.lua
+# 5. Ensure SUPER + SHIFT + R (start/stop) and SUPER + R (pause/resume) keybindings are in ~/.config/hypr/bindings.lua
 if [[ -f "${BINDINGS_LUA}" ]]; then
   if ! grep -q "selective-reading" "${BINDINGS_LUA}"; then
     cat >> "${BINDINGS_LUA}" <<EOF
 
--- Selective Reading: Read aloud selected text (or stop if currently reading)
-o.bind("SUPER + R", "Selective reading", "${HOME}/.local/bin/selective-reading toggle")
+-- Selective Reading: Start/stop reading (SUPER + SHIFT + R) and pause/resume (SUPER + R)
+o.bind("SUPER + SHIFT + R", "Selective reading (start/stop)", "${HOME}/.local/bin/selective-reading toggle")
+o.bind("SUPER + R", "Selective reading (pause/resume)", "${HOME}/.local/bin/selective-reading pause")
 EOF
-    echo "  [+] Added SUPER + R keybinding to ${BINDINGS_LUA}"
+    echo "  [+] Added Selective Reading keybindings (SUPER + SHIFT + R, SUPER + R) to ${BINDINGS_LUA}"
   else
-    echo "  [=] SUPER + R keybinding already present in ${BINDINGS_LUA}"
+    echo "  [=] Selective Reading keybindings already present in ${BINDINGS_LUA}"
   fi
 fi
 

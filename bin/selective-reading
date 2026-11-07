@@ -6,6 +6,7 @@ import json
 import os
 import re
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -19,6 +20,7 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 STATE_DIR = HOME / ".local" / "state" / "omarchy" / "selective-reading"
 STATE_FILE = STATE_DIR / "state.json"
 PID_FILE = Path("/tmp/selective-reading.pid")
+MPV_IPC_SOCKET = Path("/tmp/selective-reading-mpv.sock")
 
 VOICES = {
     "en-US-JennyNeural": {
@@ -303,6 +305,7 @@ def load_state() -> dict:
     voice_id = cfg["voice"]
     return {
         "isPlaying": False,
+        "isPaused": False,
         "voice": voice_id,
         "voiceName": VOICES.get(voice_id, {}).get("name", "Jenny"),
         "rate": cfg["rate"],
@@ -311,13 +314,23 @@ def load_state() -> dict:
     }
 
 
-def write_state(is_playing: bool, snippet: str | None = None) -> dict:
+def write_state(
+    is_playing: bool,
+    snippet: str | None = None,
+    is_paused: bool | None = None,
+) -> dict:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     prev = load_state()
     cfg = load_config()
     voice_id = cfg["voice"]
+    paused_val = (
+        False
+        if not is_playing
+        else (is_paused if is_paused is not None else bool(prev.get("isPaused", False)))
+    )
     state = {
         "isPlaying": is_playing,
+        "isPaused": paused_val,
         "voice": voice_id,
         "voiceName": VOICES.get(voice_id, {}).get("name", "Jenny"),
         "rate": cfg["rate"],
@@ -367,15 +380,83 @@ def get_running_pid() -> int | None:
         return None
 
 
+def _mpv_ipc_command(cmd_list: list) -> dict | None:
+    for _ in range(20):
+        if MPV_IPC_SOCKET.exists():
+            break
+        time.sleep(0.025)
+    if not MPV_IPC_SOCKET.exists():
+        return None
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1.0)
+            sock.connect(str(MPV_IPC_SOCKET))
+            payload = (json.dumps({"command": cmd_list}) + "\n").encode("utf-8")
+            sock.sendall(payload)
+            resp = b""
+            while b"\n" not in resp:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                resp += chunk
+            for line in resp.decode("utf-8", errors="ignore").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                data = json.loads(line)
+                if "error" in data:
+                    return data
+    except Exception:
+        return None
+    return None
+
+
+def toggle_pause(force_resume: bool = False) -> bool:
+    pid = get_running_pid()
+    if pid is None:
+        write_state(False, is_paused=False)
+        notify("Selective Reading", "No active reading to pause.")
+        return False
+
+    st = load_state()
+    currently_paused = bool(st.get("isPaused", False))
+    if force_resume and not currently_paused:
+        notify("Selective Reading", "Already playing")
+        return True
+
+    target_paused = False if force_resume else (not currently_paused)
+
+    resp = _mpv_ipc_command(["set_property", "pause", target_paused])
+    if resp is None or resp.get("error") != "success":
+        sig = signal.SIGSTOP if target_paused else signal.SIGCONT
+        try:
+            os.killpg(os.getpgid(pid), sig)
+        except Exception:
+            try:
+                os.kill(pid, sig)
+            except Exception:
+                pass
+
+    write_state(True, is_paused=target_paused)
+    if target_paused:
+        notify("Selective Reading", "Paused reading (SUPER + R to resume)")
+    else:
+        notify("Selective Reading", "Resumed reading")
+    return True
+
+
 def stop_playback(quiet: bool = False) -> bool:
     pid = get_running_pid()
     was_running = False
     if pid is not None:
         was_running = True
         try:
-            os.killpg(os.getpgid(pid), signal.SIGTERM)
+            pgid = os.getpgid(pid)
+            os.killpg(pgid, signal.SIGCONT)
+            os.killpg(pgid, signal.SIGTERM)
         except Exception:
             try:
+                os.kill(pid, signal.SIGCONT)
                 os.kill(pid, signal.SIGTERM)
             except Exception:
                 pass
@@ -395,7 +476,11 @@ def stop_playback(quiet: bool = False) -> bool:
         PID_FILE.unlink(missing_ok=True)
     except Exception:
         pass
-    write_state(False)
+    try:
+        MPV_IPC_SOCKET.unlink(missing_ok=True)
+    except Exception:
+        pass
+    write_state(False, is_paused=False)
     if was_running and not quiet:
         notify("Selective Reading", "Stopped reading")
     return was_running
@@ -457,6 +542,10 @@ def get_selected_text() -> str:
 
 
 async def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
+    try:
+        MPV_IPC_SOCKET.unlink(missing_ok=True)
+    except Exception:
+        pass
     communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate)
     mpv_proc = subprocess.Popen(
         [
@@ -466,6 +555,8 @@ async def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
             "--no-terminal",
             "--title=Selective Reading",
             "--cache=yes",
+            "--demuxer-max-bytes=50MiB",
+            f"--input-ipc-server={MPV_IPC_SOCKET}",
             "-",
         ],
         stdin=subprocess.PIPE,
@@ -495,6 +586,10 @@ async def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
                 mpv_proc.wait(timeout=1)
             except Exception:
                 mpv_proc.kill()
+        try:
+            MPV_IPC_SOCKET.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def run_worker(text: str, voice: str, rate: str) -> None:
@@ -509,7 +604,7 @@ def run_worker(text: str, voice: str, rate: str) -> None:
 
     one_line = re.sub(r"\s+", " ", text).strip()
     snippet = one_line[:140] + ("…" if len(one_line) > 140 else "")
-    write_state(True, snippet)
+    write_state(True, snippet, is_paused=False)
 
     try:
         asyncio.run(stream_tts_to_mpv(text, voice, rate))
@@ -524,7 +619,8 @@ def run_worker(text: str, voice: str, rate: str) -> None:
             current_pid = None
         if current_pid == my_pid:
             PID_FILE.unlink(missing_ok=True)
-            write_state(False)
+            MPV_IPC_SOCKET.unlink(missing_ok=True)
+            write_state(False, is_paused=False)
 
 
 def spawn_reader(text: str, voice: str, rate: str, show_notification: bool = True) -> None:
@@ -532,7 +628,7 @@ def spawn_reader(text: str, voice: str, rate: str, show_notification: bool = Tru
     formatted = format_text_for_speech(text)
     if not formatted:
         notify("Selective Reading", "No text selected to read.")
-        write_state(False)
+        write_state(False, is_paused=False)
         return
 
     voice_name = VOICES.get(voice, {}).get("name", voice)
@@ -542,7 +638,7 @@ def spawn_reader(text: str, voice: str, rate: str, show_notification: bool = Tru
         notify(f"Reading ({voice_name})", preview_str)
 
     snippet = one_line[:140] + ("…" if len(one_line) > 140 else "")
-    write_state(True, snippet)
+    write_state(True, snippet, is_paused=False)
 
     proc = subprocess.Popen(
         [
@@ -580,6 +676,8 @@ def main() -> None:
 
     sub.add_parser("stop", help="Stop current playback")
     sub.add_parser("toggle", help="Toggle reading selected text / stop if playing")
+    sub.add_parser("pause", help="Toggle pause / resume on current playback")
+    sub.add_parser("resume", help="Resume paused playback")
 
     prev_p = sub.add_parser("preview", help="Preview a voice")
     prev_p.add_argument("voice", nargs="?", default=None, help="Voice ID to preview")
@@ -609,6 +707,14 @@ def main() -> None:
 
     if cmd == "stop":
         stop_playback(quiet=False)
+        return
+
+    if cmd == "pause":
+        toggle_pause(force_resume=False)
+        return
+
+    if cmd == "resume":
+        toggle_pause(force_resume=True)
         return
 
     if cmd == "format":

@@ -19,7 +19,7 @@ cd Omarchy-Plugins
 2. Installs the formatting-aware **`selective-reading`** neural TTS CLI to `~/.local/bin/selective-reading`.
 3. Installs the **`20-sync-cad-icons`** theme hook to `~/.config/omarchy/hooks/theme-set.d/20-sync-cad-icons`.
 4. Restores `~/.config/omarchy/shell.json` so every icon remains in its exact bar section and order (`left`, `centerBegin`, `center`, `centerEnd`, `right`).
-5. Configures the **`SUPER + R`** global shortcut in `~/.config/hypr/bindings.lua` for **Selective Reading**.
+5. Configures the **`SUPER + SHIFT + R`** (start/stop) and **`SUPER + R`** (pause/resume) global shortcuts in `~/.config/hypr/bindings.lua` for **Selective Reading**.
 6. Immediately executes `20-sync-cad-icons` to render all `*.svg.tpl` icons using the active theme's color palette (`~/.local/state/omarchy/current/theme/colors.toml`), and hot-reloads `omarchy-shell` and Hyprland.
 
 ---
@@ -44,7 +44,7 @@ cd Omarchy-Plugins
 | Position | Plugin ID | Tool Name | Description | Documentation |
 | :---: | :--- | :--- | :--- | :--- |
 | 3 | `jesseburlamaque.antigravity-usage` | **Antigravity Usage** | Antigravity AI quota and active session monitor (with custom CAD icon template) | [README](plugins/jesseburlamaque.antigravity-usage/README.md) |
-| 5 | `raqune.selective-reading` | **Selective Reading** | Formatting-aware neural TTS reader (`SUPER + R`) with 6 realistic voices & speed controls | [README](plugins/raqune.selective-reading/README.md) |
+| 5 | `raqune.selective-reading` | **Selective Reading** | Formatting-aware neural TTS reader (`SUPER + SHIFT + R` start/stop, `SUPER + R` pause/resume) with 6 realistic voices & speed controls | [README](plugins/raqune.selective-reading/README.md) |
 
 ### CAD-Themed Core Bar Widgets
 Also included so the entire bar shares a unified tactical CAD visual language:
