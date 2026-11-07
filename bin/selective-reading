@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run --quiet --with edge-tts python3
+#!/usr/bin/env -S uv run --quiet --with kokoro-onnx python3
 import argparse
 import asyncio
 from html.parser import HTMLParser
@@ -10,47 +10,60 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
-import edge_tts
+from kokoro_onnx import Kokoro
+import numpy as np
 
 HOME = Path.home()
 CONFIG_DIR = HOME / ".config" / "omarchy" / "selective-reading"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 STATE_DIR = HOME / ".local" / "state" / "omarchy" / "selective-reading"
 STATE_FILE = STATE_DIR / "state.json"
+MODEL_DIR = HOME / ".local" / "share" / "omarchy" / "selective-reading" / "models"
+MODEL_FILE = MODEL_DIR / "kokoro-v1.0.onnx"
+VOICES_FILE = MODEL_DIR / "voices-v1.0.bin"
+MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
 PID_FILE = Path("/tmp/selective-reading.pid")
 MPV_IPC_SOCKET = Path("/tmp/selective-reading-mpv.sock")
 
 VOICES = {
-    "en-US-JennyNeural": {
-        "name": "Jenny",
-        "desc": "Natural, Friendly (US Female)",
+    "af_heart": {
+        "name": "Heart",
+        "desc": "Warm, Expressive Studio (US Female)",
+        "lang": "en-us",
     },
-    "en-US-GuyNeural": {
-        "name": "Guy",
-        "desc": "Casual, Expressive (US Male)",
+    "af_bella": {
+        "name": "Bella",
+        "desc": "Natural, Conversational (US Female)",
+        "lang": "en-us",
     },
-    "en-US-AriaNeural": {
-        "name": "Aria",
-        "desc": "Crisp, Versatile (US Female)",
+    "am_michael": {
+        "name": "Michael",
+        "desc": "Deep, Podcast Host (US Male)",
+        "lang": "en-us",
     },
-    "en-US-ChristopherNeural": {
-        "name": "Christopher",
-        "desc": "Clear, Authoritative (US Male)",
+    "am_adam": {
+        "name": "Adam",
+        "desc": "Clear, Engaging Narrator (US Male)",
+        "lang": "en-us",
     },
-    "en-GB-SoniaNeural": {
-        "name": "Sonia",
-        "desc": "Warm, Refined (UK Female)",
+    "bf_emma": {
+        "name": "Emma",
+        "desc": "Refined, Studio Narrator (UK Female)",
+        "lang": "en-gb",
     },
-    "en-GB-RyanNeural": {
-        "name": "Ryan",
-        "desc": "Polite, Articulate (UK Male)",
+    "bm_george": {
+        "name": "George",
+        "desc": "Warm, Classic Audiobook (UK Male)",
+        "lang": "en-gb",
     },
 }
 
 DEFAULT_CONFIG = {
-    "voice": "en-US-JennyNeural",
+    "voice": "af_heart",
     "rate": "+0%",
 }
 
@@ -275,12 +288,18 @@ def load_config() -> dict:
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
             voice = data.get("voice", DEFAULT_CONFIG["voice"])
+            changed = False
             if voice not in VOICES:
                 voice = DEFAULT_CONFIG["voice"]
+                changed = True
             rate = data.get("rate", DEFAULT_CONFIG["rate"])
             if not re.match(r"^[+-]\d+%$", str(rate)):
                 rate = DEFAULT_CONFIG["rate"]
-            return {"voice": voice, "rate": rate}
+                changed = True
+            cfg = {"voice": voice, "rate": rate}
+            if changed:
+                save_config(cfg)
+            return cfg
         except Exception:
             pass
     save_config(DEFAULT_CONFIG)
@@ -298,7 +317,9 @@ def load_state() -> dict:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     if STATE_FILE.exists():
         try:
-            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            st = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            if st.get("voice") in VOICES:
+                return st
         except Exception:
             pass
     cfg = load_config()
@@ -307,7 +328,7 @@ def load_state() -> dict:
         "isPlaying": False,
         "isPaused": False,
         "voice": voice_id,
-        "voiceName": VOICES.get(voice_id, {}).get("name", "Jenny"),
+        "voiceName": VOICES.get(voice_id, {}).get("name", "Heart"),
         "rate": cfg["rate"],
         "textSnippet": "",
         "updatedAt": int(time.time()),
@@ -332,7 +353,7 @@ def write_state(
         "isPlaying": is_playing,
         "isPaused": paused_val,
         "voice": voice_id,
-        "voiceName": VOICES.get(voice_id, {}).get("name", "Jenny"),
+        "voiceName": VOICES.get(voice_id, {}).get("name", "Heart"),
         "rate": cfg["rate"],
         "textSnippet": snippet if snippet is not None else prev.get("textSnippet", ""),
         "updatedAt": int(time.time()),
@@ -541,12 +562,41 @@ def get_selected_text() -> str:
     return ""
 
 
+def rate_to_speed(rate: str) -> float:
+    m = re.match(r"^([+-]?\d+)%$", str(rate).strip())
+    if not m:
+        return 1.0
+    pct = int(m.group(1))
+    return max(0.5, min(2.0, 1.0 + (pct / 100.0)))
+
+
+def ensure_models(show_notifications: bool = True) -> None:
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    missing = [
+        (VOICES_FILE, VOICES_URL, "voices-v1.0.bin"),
+        (MODEL_FILE, MODEL_URL, "kokoro-v1.0.onnx"),
+    ]
+    needs_download = any(not f.exists() or f.stat().st_size < 1024 for f, _, _ in missing)
+    if needs_download and show_notifications:
+        notify("Selective Reading", "Downloading Kokoro-82M voice pack (first-time setup)…")
+    for dest, url, label in missing:
+        if dest.exists() and dest.stat().st_size >= 1024:
+            continue
+        tmp = dest.with_suffix(".part")
+        urllib.request.urlretrieve(url, str(tmp))
+        tmp.replace(dest)
+
+
 async def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
     try:
         MPV_IPC_SOCKET.unlink(missing_ok=True)
     except Exception:
         pass
-    communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate)
+    ensure_models(show_notifications=True)
+    kokoro = Kokoro(str(MODEL_FILE), str(VOICES_FILE))
+    speed = rate_to_speed(rate)
+    lang = VOICES.get(voice, {}).get("lang", "en-us")
+
     mpv_proc = subprocess.Popen(
         [
             "mpv",
@@ -554,8 +604,12 @@ async def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
             "--really-quiet",
             "--no-terminal",
             "--title=Selective Reading",
+            "--demuxer=rawaudio",
+            "--demuxer-rawaudio-rate=24000",
+            "--demuxer-rawaudio-channels=1",
+            "--demuxer-rawaudio-format=floatle",
             "--cache=yes",
-            "--demuxer-max-bytes=50MiB",
+            "--demuxer-max-bytes=100MiB",
             f"--input-ipc-server={MPV_IPC_SOCKET}",
             "-",
         ],
@@ -564,12 +618,28 @@ async def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
         stderr=subprocess.DEVNULL,
     )
     try:
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio" and chunk.get("data"):
+        blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
+        silence_pcm = np.zeros(int(24000 * 0.42), dtype="<f4").tobytes()
+        for idx, block in enumerate(blocks):
+            if mpv_proc.poll() is not None:
+                break
+            async for samples, _sr in kokoro.create_stream(
+                block,
+                voice=voice,
+                speed=speed,
+                lang=lang,
+            ):
                 if mpv_proc.poll() is not None:
                     break
+                pcm = np.asarray(samples, dtype="<f4").tobytes()
                 try:
-                    mpv_proc.stdin.write(chunk["data"])
+                    mpv_proc.stdin.write(pcm)
+                    mpv_proc.stdin.flush()
+                except (BrokenPipeError, OSError):
+                    break
+            if idx < len(blocks) - 1 and mpv_proc.poll() is None:
+                try:
+                    mpv_proc.stdin.write(silence_pcm)
                     mpv_proc.stdin.flush()
                 except (BrokenPipeError, OSError):
                     break
@@ -678,6 +748,7 @@ def main() -> None:
     sub.add_parser("toggle", help="Toggle reading selected text / stop if playing")
     sub.add_parser("pause", help="Toggle pause / resume on current playback")
     sub.add_parser("resume", help="Resume paused playback")
+    sub.add_parser("setup", help="Download and cache Kokoro-82M realistic voice models")
 
     prev_p = sub.add_parser("preview", help="Preview a voice")
     prev_p.add_argument("voice", nargs="?", default=None, help="Voice ID to preview")
@@ -703,6 +774,12 @@ def main() -> None:
 
     if cmd == "_worker":
         run_worker(args.text, args.voice, args.rate)
+        return
+
+    if cmd == "setup":
+        ensure_models(show_notifications=False)
+        write_state(get_running_pid() is not None)
+        print(f"Kokoro-82M models ready in {MODEL_DIR}")
         return
 
     if cmd == "stop":

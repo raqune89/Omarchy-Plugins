@@ -16,18 +16,18 @@ Panel {
 
   property bool isPlaying: false
   property bool isPaused: false
-  property string currentVoice: "en-US-JennyNeural"
-  property string currentVoiceName: "Jenny"
+  property string currentVoice: "af_heart"
+  property string currentVoiceName: "Heart"
   property string currentRate: "+0%"
   property string lastSnippet: ""
 
   readonly property var voices: [
-    { id: "en-US-JennyNeural", name: "Jenny", desc: "Natural, Friendly (US F)" },
-    { id: "en-US-GuyNeural", name: "Guy", desc: "Casual, Expressive (US M)" },
-    { id: "en-US-AriaNeural", name: "Aria", desc: "Crisp, Versatile (US F)" },
-    { id: "en-US-ChristopherNeural", name: "Christopher", desc: "Authoritative (US M)" },
-    { id: "en-GB-SoniaNeural", name: "Sonia", desc: "Warm, Refined (UK F)" },
-    { id: "en-GB-RyanNeural", name: "Ryan", desc: "Polite, Articulate (UK M)" }
+    { id: "af_heart", name: "Heart", desc: "Warm, Expressive Studio (US F)" },
+    { id: "af_bella", name: "Bella", desc: "Natural, Conversational (US F)" },
+    { id: "am_michael", name: "Michael", desc: "Deep, Podcast Host (US M)" },
+    { id: "am_adam", name: "Adam", desc: "Clear, Engaging Narrator (US M)" },
+    { id: "bf_emma", name: "Emma", desc: "Refined, Studio Narrator (UK F)" },
+    { id: "bm_george", name: "George", desc: "Warm, Classic Audiobook (UK M)" }
   ]
 
   readonly property var rates: [

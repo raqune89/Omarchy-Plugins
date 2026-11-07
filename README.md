@@ -16,7 +16,7 @@ cd Omarchy-Plugins
 
 ### What `./install.sh` Does:
 1. Installs all **10 custom menu bar tools** and **13 CAD-styled core bar widgets** into `~/.config/omarchy/plugins/`.
-2. Installs the formatting-aware **`selective-reading`** neural TTS CLI to `~/.local/bin/selective-reading`.
+2. Installs the formatting-aware **`selective-reading`** Kokoro-82M realistic TTS CLI to `~/.local/bin/selective-reading` and caches the local voice models.
 3. Installs the **`20-sync-cad-icons`** theme hook to `~/.config/omarchy/hooks/theme-set.d/20-sync-cad-icons`.
 4. Restores `~/.config/omarchy/shell.json` so every icon remains in its exact bar section and order (`left`, `centerBegin`, `center`, `centerEnd`, `right`).
 5. Configures the **`SUPER + SHIFT + R`** (start/stop) and **`SUPER + R`** (pause/resume) global shortcuts in `~/.config/hypr/bindings.lua` for **Selective Reading**.
@@ -44,7 +44,7 @@ cd Omarchy-Plugins
 | Position | Plugin ID | Tool Name | Description | Documentation |
 | :---: | :--- | :--- | :--- | :--- |
 | 3 | `jesseburlamaque.antigravity-usage` | **Antigravity Usage** | Antigravity AI quota and active session monitor (with custom CAD icon template) | [README](plugins/jesseburlamaque.antigravity-usage/README.md) |
-| 5 | `raqune.selective-reading` | **Selective Reading** | Formatting-aware neural TTS reader (`SUPER + SHIFT + R` start/stop, `SUPER + R` pause/resume) with 6 realistic voices & speed controls | [README](plugins/raqune.selective-reading/README.md) |
+| 5 | `raqune.selective-reading` | **Selective Reading** | Formatting-aware Kokoro-82M TTS reader (`SUPER + SHIFT + R` start/stop, `SUPER + R` pause/resume) with 6 realistic studio voices & speed controls | [README](plugins/raqune.selective-reading/README.md) |
 
 ### CAD-Themed Core Bar Widgets
 Also included so the entire bar shares a unified tactical CAD visual language:

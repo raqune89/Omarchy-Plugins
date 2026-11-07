@@ -15,11 +15,13 @@ mkdir -p "${PLUGINS_DEST}"
 cp -r "${REPO_DIR}/plugins/"* "${PLUGINS_DEST}/"
 echo "  [+] Installed $(ls -1d "${REPO_DIR}/plugins/"* | wc -l) plugins to ${PLUGINS_DEST}"
 
-# 2. Install helper CLI scripts
+# 2. Install helper CLI scripts & pre-download Kokoro-82M voice pack
 mkdir -p "${BIN_DEST}"
 cp -f "${REPO_DIR}/bin/selective-reading" "${BIN_DEST}/selective-reading"
 chmod +x "${BIN_DEST}/selective-reading"
 echo "  [+] Installed selective-reading CLI to ${BIN_DEST}/selective-reading"
+echo "  [*] Ensuring Kokoro-82M realistic voice models are cached..."
+"${BIN_DEST}/selective-reading" setup || true
 
 # 3. Install theme-set hook for live CAD SVG icon color rendering
 mkdir -p "${HOOKS_DEST}"
