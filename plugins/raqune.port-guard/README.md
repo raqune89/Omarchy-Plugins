@@ -4,7 +4,7 @@ Local TCP listening port scanner and service inspector widget for the Omarchy st
 
 ## Features
 - Periodically scans local listening TCP sockets via `ss -tlpn`.
-- Displays the count of open listening ports in the tooltip and hero header, along with port numbers and process info in the popup panel.
+- Displays a 3-column table (`PORT`, `APP / SERVICE`, `BIND IP`) showing the port number, the owning process/PID or resolved system service (`systemd-resolved`, `cupsd`, `sshd`, `/etc/services`), and the bind IP address.
 - Theme-adaptive CAD icon (`port-guard-cad.svg.tpl`).
 
 ## Dependencies

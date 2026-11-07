@@ -5,7 +5,7 @@ CTF OpenVPN (`tun0`) connection monitor, latency tracker, and launcher for the O
 ## Features
 - Monitors `tun0` interface state and identifies HackTheBox, TryHackMe, or general OpenVPN tunnels.
 - Measures live ICMP ping latency over the VPN tunnel.
-- Launches a floating terminal in `~/htb` (or `~/Downloads`) to start `.ovpn` profiles, or disconnects active tunnels with one click.
+- Automatically discovers `.ovpn` profiles across `~/Documents`, `~/htb`, and `~/Downloads` for one-click connection, or launches a floating OpenVPN terminal in your profile directory.
 - Theme-adaptive CAD icon (`tun-switcher-cad.svg.tpl`).
 
 ## Dependencies

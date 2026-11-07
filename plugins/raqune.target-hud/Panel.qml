@@ -158,7 +158,7 @@ Panel {
             bordered: true
             onClicked: {
               if (root.targetIp === "") return
-              Util.execArgv(["omarchy-launch-floating-terminal", "sh", "-c", "nmap -sC -sV " + root.targetIp + "; exec bash"])
+              Util.execArgv(["setsid", "uwsm-app", "--", "xdg-terminal-exec", "--app-id=org.omarchy.terminal", "--title=Target HUD Nmap", "-e", "bash", "-c", "nmap -sC -sV " + root.targetIp + "; exec bash"])
               root.close()
             }
           }
