@@ -84,7 +84,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(340))
+    contentWidth: panel.fittedContentWidth(Style.space(360))
     contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
     PanelKeyCatcher {
@@ -144,16 +144,19 @@ Panel {
           spacing: Style.space(8)
 
           Button {
+            width: Math.floor((parent.width - Style.space(16)) / 3)
             text: "Copy Target"
             bordered: true
             onClicked: root.copyToClipboard(root.targetIp)
           }
           Button {
+            width: Math.floor((parent.width - Style.space(16)) / 3)
             text: "Copy tun0"
             bordered: true
             onClicked: root.copyToClipboard(root.tun0Ip)
           }
           Button {
+            width: parent.width - 2 * Math.floor((parent.width - Style.space(16)) / 3) - Style.space(16)
             text: "Nmap Scan"
             bordered: true
             onClicked: {

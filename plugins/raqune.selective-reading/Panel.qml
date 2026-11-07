@@ -123,7 +123,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(350))
+    contentWidth: panel.fittedContentWidth(Style.space(360))
     contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
     PanelKeyCatcher {
@@ -165,13 +165,15 @@ Panel {
           spacing: Style.space(8)
 
           Button {
-            text: "Read Selected Text"
+            width: Math.floor((parent.width - Style.space(16)) * 0.44)
+            text: "Read Text"
             bordered: true
             selected: root.isPlaying && !root.isPaused
             onClicked: root.triggerRead()
           }
 
           Button {
+            width: Math.floor((parent.width - Style.space(16)) * 0.30)
             text: root.isPaused ? "Resume" : "Pause"
             bordered: true
             selected: root.isPaused
@@ -180,6 +182,7 @@ Panel {
           }
 
           Button {
+            width: parent.width - Math.floor((parent.width - Style.space(16)) * 0.44) - Math.floor((parent.width - Style.space(16)) * 0.30) - Style.space(16)
             text: "Stop"
             bordered: true
             enabled: root.isPlaying
@@ -236,6 +239,7 @@ Panel {
           Repeater {
             model: root.rates
             delegate: Button {
+              width: Math.floor((column.width - Style.space(18)) / 4)
               text: modelData.label
               bordered: true
               selected: root.currentRate === modelData.id

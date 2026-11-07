@@ -122,7 +122,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(320))
+    contentWidth: panel.fittedContentWidth(Style.space(360))
     contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
     PanelKeyCatcher {
@@ -162,6 +162,7 @@ Panel {
           spacing: Style.space(8)
 
           Button {
+            width: Math.floor((parent.width - Style.space(8)) / 2)
             text: "Connect (THMvpn)"
             bordered: true
             selected: root.vpnActive
@@ -169,6 +170,7 @@ Panel {
           }
 
           Button {
+            width: Math.floor((parent.width - Style.space(8)) / 2)
             text: "Disconnect (THMstop)"
             bordered: true
             onClicked: root.disconnectThmVpn()

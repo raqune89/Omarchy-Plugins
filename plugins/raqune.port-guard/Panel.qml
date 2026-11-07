@@ -125,7 +125,7 @@ Panel {
             font.family: Style.font.family
             font.bold: true
             font.pixelSize: Style.font.caption
-            width: Style.space(62)
+            width: Style.space(58)
           }
 
           Text {
@@ -135,7 +135,7 @@ Panel {
             font.family: Style.font.family
             font.bold: true
             font.pixelSize: Style.font.caption
-            width: Style.space(182)
+            width: Style.space(172)
           }
 
           Text {
@@ -145,7 +145,7 @@ Panel {
             font.family: Style.font.family
             font.bold: true
             font.pixelSize: Style.font.caption
-            width: Math.max(Style.space(60), column.width - Style.space(260))
+            width: Math.max(Style.space(50), column.width - Style.space(246))
           }
         }
 
@@ -163,7 +163,7 @@ Panel {
               font.family: Style.font.family
               font.bold: true
               font.pixelSize: Style.font.body
-              width: Style.space(62)
+              width: Style.space(58)
               elide: Text.ElideRight
               clip: true
               anchors.verticalCenter: parent.verticalCenter
@@ -175,7 +175,7 @@ Panel {
               color: Commons.Color.foreground
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
-              width: Style.space(182)
+              width: Style.space(172)
               elide: Text.ElideRight
               clip: true
               anchors.verticalCenter: parent.verticalCenter
@@ -187,7 +187,7 @@ Panel {
               color: Qt.darker(Commons.Color.foreground, 1.35)
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
-              width: Math.max(Style.space(60), column.width - Style.space(260))
+              width: Math.max(Style.space(50), column.width - Style.space(246))
               elide: Text.ElideRight
               clip: true
               anchors.verticalCenter: parent.verticalCenter

