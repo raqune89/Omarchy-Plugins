@@ -23,7 +23,8 @@ Panel {
 
   readonly property var voices: [
     { id: "morgan_freeman", name: "Morgan Freeman", desc: "Deep, Iconic Narrator (US M)" },
-    { id: "stephen_fry", name: "Stephen Fry", desc: "Warm, Classic Audiobook (UK M)" }
+    { id: "stephen_fry", name: "Stephen Fry", desc: "Warm, Classic Audiobook (UK M)" },
+    { id: "matthew_mcconaughey", name: "Matthew McConaughey", desc: "Smooth, Laid-Back Drawl (US M)" }
   ]
 
   readonly property var rates: [

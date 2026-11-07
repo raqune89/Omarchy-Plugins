@@ -23,10 +23,10 @@ DATA_DIR = HOME / ".local" / "share" / "omarchy" / "selective-reading"
 VENV_DIR = DATA_DIR / "venv"
 VENV_PYTHON = VENV_DIR / "bin" / "python"
 MODEL_DIR = DATA_DIR / "models"
-KOKORO_MODEL_FILE = MODEL_DIR / "kokoro-v1.0.onnx"
-KOKORO_VOICES_FILE = MODEL_DIR / "voices-v1.0.bin"
-KOKORO_MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
-KOKORO_VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+F5_DIR = MODEL_DIR / "f5_tts"
+F5_CKPT_FILE = F5_DIR / "model_1250000.safetensors"
+F5_VOCOS_DIR = F5_DIR / "vocos"
+VOICES_DIR = DATA_DIR / "voices"
 RVC_DIR = DATA_DIR / "rvc_models"
 
 PID_FILE = Path("/tmp/selective-reading.pid")
@@ -39,10 +39,11 @@ VOICES = {
         "name": "Morgan Freeman",
         "desc": "Deep, Iconic Narrator (US Male)",
         "lang": "en-us",
-        "kokoro_blend": (("am_onyx", 0.65), ("am_michael", 0.35)),
-        "f0_up_key": -1,
-        "index_rate": 0.75,
-        "protect": 0.33,
+        "ref_wav": "morgan_freeman_ref.wav",
+        "ref_text": "I'm giving you the finest voice in the land, but that doesn't come cheap, homie. If you want the velvet, you got to bring the silver. ",
+        "f0_up_key": 0,
+        "index_rate": 0.45,
+        "protect": 0.45,
         "hf_repo": "Supanovah/MorganFreeman",
         "hf_zip": "MorganFreeman_e440_s4840.zip",
         "pth_name": "MorganFreeman_e440_s4840.pth",
@@ -52,14 +53,29 @@ VOICES = {
         "name": "Stephen Fry",
         "desc": "Warm, Classic Audiobook (UK Male)",
         "lang": "en-gb",
-        "kokoro_blend": (("bm_george", 0.65), ("bm_fable", 0.35)),
+        "ref_wav": "stephen_fry_ref.wav",
+        "ref_text": "Hello, I'm Stephen Fry, and my narrations of Harry Potter books one to seven are now available to listeners in the US and Canada. ",
         "f0_up_key": 0,
-        "index_rate": 0.75,
-        "protect": 0.33,
+        "index_rate": 0.45,
+        "protect": 0.45,
         "hf_repo": "imbetter/stephenfry64",
         "hf_zip": "StephenFry64.zip",
         "pth_name": "StephenFry64.pth",
         "index_name": "added_IVF553_Flat_nprobe_1_StephenFry64_v2.index",
+    },
+    "matthew_mcconaughey": {
+        "name": "Matthew McConaughey",
+        "desc": "Smooth, Laid-Back Drawl (US Male)",
+        "lang": "en-us",
+        "ref_wav": "matthew_mcconaughey_ref.wav",
+        "ref_text": "This is not a traditional memoir. Yes, I tell stories from the past, but I have no interest in nostalgia, sentimentality, or the retirement that most memoirs require. ",
+        "f0_up_key": 0,
+        "index_rate": 0.50,
+        "protect": 0.45,
+        "hf_repo": "RoyalAce/matthew_mcconaughey_rvc_v2_48k_1.05k_epoch",
+        "hf_zip": "matthew_mcconaughey.7z",
+        "pth_name": "matthew_mcconaughey_e1050_s40950.pth",
+        "index_name": "added_IVF578_Flat_nprobe_1_matthew_mcconaughey_v2.index",
     },
 }
 
@@ -576,14 +592,18 @@ def ensure_daemon_running(show_notifications: bool = True) -> bool:
     if _daemon_is_ready():
         return True
 
-    if not VENV_PYTHON.exists() or not (RVC_DIR / "morgan_freeman" / VOICES["morgan_freeman"]["pth_name"]).exists():
+    if (
+        not VENV_PYTHON.exists()
+        or not F5_CKPT_FILE.exists()
+        or not (RVC_DIR / "morgan_freeman" / VOICES["morgan_freeman"]["pth_name"]).exists()
+    ):
         if show_notifications:
-            notify("Selective Reading", "Setting up Kokoro + RVC v2 celebrity models…")
+            notify("Selective Reading", "Setting up F5-TTS + RVC v2 celebrity models…")
         setup_environment(show_notifications=show_notifications)
 
     if get_running_pid(DAEMON_PID_FILE) is None:
         if show_notifications:
-            notify("Selective Reading", "Warming up GPU RVC v2 voice engine…")
+            notify("Selective Reading", "Warming up GPU F5-TTS + RVC v2 voice engine…")
         proc = subprocess.Popen(
             [str(VENV_PYTHON), str(Path(__file__).resolve()), "_daemon"],
             stdin=subprocess.DEVNULL,
@@ -593,20 +613,43 @@ def ensure_daemon_running(show_notifications: bool = True) -> bool:
         )
         DAEMON_PID_FILE.write_text(str(proc.pid), encoding="utf-8")
 
-    for _ in range(120):
+    for _ in range(160):
         if _daemon_is_ready():
             return True
         time.sleep(0.25)
     return False
 
 
+def _chunk_block_for_f5(block: str) -> list[str]:
+    sentences = [s.strip() for s in re.split(r"(?<=[;:,.!?])\s+", block) if s.strip()]
+    if not sentences:
+        return [block] if block.strip() else []
+    chunks: list[str] = []
+    cur = ""
+    for s in sentences:
+        limit = 95 if not chunks else 135
+        candidate = f"{cur} {s}".strip() if cur else s
+        if len(candidate) <= limit or len(cur) < 30:
+            cur = candidate
+        else:
+            chunks.append(cur)
+            cur = s
+    if cur:
+        if chunks and len(cur) < 20 and len(chunks[-1]) + len(cur) < 160:
+            chunks[-1] = f"{chunks[-1]} {cur}".strip()
+        else:
+            chunks.append(cur)
+    return chunks
+
+
 def run_daemon() -> None:
     sys.argv = [sys.argv[0]]
     os.environ["HF_HUB_OFFLINE"] = "1"
-    import asyncio
     import numpy as np
     import torch
-    from kokoro_onnx import Kokoro
+    import torchaudio
+    from f5_tts.api import F5TTS
+    from f5_tts.infer.utils_infer import infer_batch_process
     from inferrvc import RVC
 
     my_pid = os.getpid()
@@ -617,37 +660,52 @@ def run_daemon() -> None:
     except Exception:
         pass
 
-    kokoro = Kokoro(str(KOKORO_MODEL_FILE), str(KOKORO_VOICES_FILE))
+    f5 = F5TTS(
+        model="F5TTS_v1_Base",
+        ckpt_file=str(F5_CKPT_FILE),
+        vocoder_local_path=str(F5_VOCOS_DIR),
+        device="cuda",
+    )
     rvc_models: dict[str, RVC] = {}
-    kokoro_styles: dict[str, np.ndarray] = {}
+    ref_audios: dict[str, tuple[torch.Tensor, int]] = {}
 
     for vid, vinfo in VOICES.items():
         vdir = RVC_DIR / vid
         pth_path = vdir / vinfo["pth_name"]
         idx_path = vdir / vinfo["index_name"]
         rvc_models[vid] = RVC(model=str(pth_path), index=str(idx_path))
+        audio_t, sr = torchaudio.load(str(VOICES_DIR / vinfo["ref_wav"]))
+        ref_audios[vid] = (audio_t, sr)
 
-        blend = None
-        for b_name, weight in vinfo["kokoro_blend"]:
-            vec = kokoro.get_voice_style(b_name) * float(weight)
-            blend = vec if blend is None else (blend + vec)
-        kokoro_styles[vid] = blend
-
-    # Warm up RMVPE + Hubert + RVC on CUDA so first user keypress starts in ~200ms
+    # Warm up F5-TTS + RMVPE + Hubert + RVC on CUDA so first user keypress starts quickly
     try:
         first_vid = next(iter(VOICES))
-        samples, sr = kokoro.create("Ready.", voice=kokoro_styles[first_vid], speed=1.0, lang=VOICES[first_vid]["lang"])
-        wav_t = torch.from_numpy(samples.astype(np.float32))
-        wav_t.frequency = sr
-        _ = rvc_models[first_vid](
-            wav_t,
-            f0_up_key=VOICES[first_vid]["f0_up_key"],
-            f0_method="rmvpe",
-            index_rate=VOICES[first_vid]["index_rate"],
-            protect=VOICES[first_vid]["protect"],
-            output_device="cpu",
-            output_volume=RVC.MATCH_ORIGINAL,
-        )
+        first_vinfo = VOICES[first_vid]
+        for wav_chunk, out_sr in infer_batch_process(
+            ref_audios[first_vid],
+            first_vinfo["ref_text"],
+            ["Ready to read."],
+            f5.ema_model,
+            f5.vocoder,
+            mel_spec_type="vocos",
+            progress=None,
+            nfe_step=16,
+            speed=1.0,
+            device="cuda",
+            streaming=True,
+            chunk_size=240000,
+        ):
+            wav_t = torch.from_numpy(np.asarray(wav_chunk, dtype=np.float32))
+            wav_t.frequency = out_sr
+            _ = rvc_models[first_vid](
+                wav_t,
+                f0_up_key=first_vinfo["f0_up_key"],
+                f0_method="rmvpe",
+                index_rate=first_vinfo["index_rate"],
+                protect=first_vinfo["protect"],
+                output_device="cpu",
+                output_volume=RVC.MATCH_ORIGINAL,
+            )
     except Exception:
         pass
 
@@ -669,22 +727,34 @@ def run_daemon() -> None:
     signal.signal(signal.SIGTERM, cleanup_and_exit)
     signal.signal(signal.SIGINT, cleanup_and_exit)
 
-    async def synthesize_and_send(conn: socket.socket, text: str, voice: str) -> None:
+    def synthesize_and_send(conn: socket.socket, text: str, voice: str) -> None:
         vinfo = VOICES.get(voice, VOICES[DEFAULT_CONFIG["voice"]])
         rvc = rvc_models[voice]
-        style = kokoro_styles[voice]
+        ref_audio = ref_audios[voice]
+        ref_text = vinfo["ref_text"]
         blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
         silence_pcm = np.zeros(int(44100 * 0.40), dtype="<f4").tobytes()
 
         for idx, block in enumerate(blocks):
-            async for samples, sr in kokoro.create_stream(
-                block,
-                voice=style,
+            batches = _chunk_block_for_f5(block)
+            if not batches:
+                continue
+            for wav_chunk, out_sr in infer_batch_process(
+                ref_audio,
+                ref_text,
+                batches,
+                f5.ema_model,
+                f5.vocoder,
+                mel_spec_type="vocos",
+                progress=None,
+                nfe_step=20,
                 speed=1.0,
-                lang=vinfo["lang"],
+                device="cuda",
+                streaming=True,
+                chunk_size=240000,
             ):
-                wav_t = torch.from_numpy(np.asarray(samples, dtype=np.float32))
-                wav_t.frequency = sr
+                wav_t = torch.from_numpy(np.asarray(wav_chunk, dtype=np.float32))
+                wav_t.frequency = out_sr
                 converted = rvc(
                     wav_t,
                     f0_up_key=vinfo["f0_up_key"],
@@ -724,7 +794,7 @@ def run_daemon() -> None:
                 if voice not in VOICES:
                     voice = DEFAULT_CONFIG["voice"]
 
-                asyncio.run(synthesize_and_send(conn, text, voice))
+                synthesize_and_send(conn, text, voice)
             except (BrokenPipeError, ConnectionResetError):
                 continue
             except Exception:
@@ -968,26 +1038,33 @@ def load_hubert(config):
                 'hf_hub_download("lj1995/VoiceConversionWebUI", "rmvpe.pt")',
                 'os.path.expanduser("~/.local/share/omarchy/selective-reading/rvc_models/rmvpe.pt")',
             )
-            pipe_py.write_text(ptxt, encoding="utf-8")
+        if 'audio, (self.t_pad, self.t_pad), mode="reflect"' in ptxt:
+            ptxt = ptxt.replace(
+                'audio, (self.t_pad, self.t_pad), mode="reflect"',
+                'audio, (self.t_pad, self.t_pad), mode="reflect" if audio.shape[-1] > self.t_pad else "constant"',
+            )
+        pipe_py.write_text(ptxt, encoding="utf-8")
+
+    f5_pkgs = list(VENV_DIR.glob("lib/python*/site-packages/f5_tts/model/__init__.py"))
+    if f5_pkgs:
+        f5_init = f5_pkgs[0]
+        itxt = f5_init.read_text(encoding="utf-8")
+        if "from f5_tts.model.trainer import Trainer" in itxt and "# from f5_tts.model.trainer import Trainer" not in itxt:
+            itxt = itxt.replace("from f5_tts.model.trainer import Trainer", "# from f5_tts.model.trainer import Trainer")
+            f5_init.write_text(itxt, encoding="utf-8")
 
 
 def setup_environment(show_notifications: bool = False) -> None:
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    F5_DIR.mkdir(parents=True, exist_ok=True)
+    F5_VOCOS_DIR.mkdir(parents=True, exist_ok=True)
+    VOICES_DIR.mkdir(parents=True, exist_ok=True)
     RVC_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 1. Ensure Kokoro-82M base weights exist
-    for dest, url in ((KOKORO_VOICES_FILE, KOKORO_VOICES_URL), (KOKORO_MODEL_FILE, KOKORO_MODEL_URL)):
-        if not dest.exists() or dest.stat().st_size < 1024:
-            if show_notifications:
-                notify("Selective Reading", "Downloading Kokoro-82M base narrator model…")
-            tmp = dest.with_suffix(".part")
-            urllib.request.urlretrieve(url, str(tmp))
-            tmp.replace(dest)
-
-    # 2. Ensure Python 3.12 GPU venv and RVC dependencies exist
+    # 1. Ensure Python 3.12 GPU venv and F5-TTS + RVC dependencies exist
     if not VENV_PYTHON.exists():
         if show_notifications:
-            notify("Selective Reading", "Creating Python 3.12 GPU RVC v2 environment…")
+            notify("Selective Reading", "Creating Python 3.12 GPU F5-TTS + RVC v2 environment…")
         subprocess.run(["uv", "venv", "--python", "3.12", str(VENV_DIR), "--allow-existing"], check=True)
         subprocess.run(
             [
@@ -1000,7 +1077,6 @@ def setup_environment(show_notifications: bool = False) -> None:
                 "torchaudio",
                 "transformers",
                 "huggingface-hub",
-                "kokoro-onnx",
                 "faiss-cpu",
                 "torchcrepe",
                 "pyworld",
@@ -1008,47 +1084,80 @@ def setup_environment(show_notifications: bool = False) -> None:
                 "soundfile",
                 "librosa",
                 "scipy",
+                "vocos",
+                "x-transformers",
+                "torchdiffeq",
+                "ema-pytorch",
+                "cached-path",
+                "pypinyin",
+                "rjieba",
+                "unidecode",
+                "tomli",
+                "pydub",
+                "accelerate",
+                "hydra-core",
+                "omegaconf",
                 "setuptools<81",
             ],
             check=True,
         )
         subprocess.run(
-            ["uv", "pip", "install", "--python", str(VENV_PYTHON), "--no-deps", "inferrvc"],
+            ["uv", "pip", "install", "--python", str(VENV_PYTHON), "--no-deps", "inferrvc", "f5-tts"],
             check=True,
         )
 
     _patch_inferrvc_in_venv()
 
-    # 3. Download RMVPE, HuBERT, and Morgan Freeman / Stephen Fry RVC v2 models if missing
-    missing_rvc = any(
-        not (RVC_DIR / vid / vinfo["pth_name"]).exists() for vid, vinfo in VOICES.items()
+    # 2. Download F5-TTS v1 Base + Vocos + RVC v2 models if missing
+    missing_models = (
+        not F5_CKPT_FILE.exists()
+        or not (F5_VOCOS_DIR / "pytorch_model.bin").exists()
+        or any(not (RVC_DIR / vid / vinfo["pth_name"]).exists() for vid, vinfo in VOICES.items())
     )
-    if missing_rvc:
+    if missing_models:
         if show_notifications:
-            notify("Selective Reading", "Downloading Morgan Freeman & Stephen Fry RVC v2 models…")
+            notify("Selective Reading", "Downloading F5-TTS + RVC v2 celebrity models…")
         dl_code = """
-import shutil, zipfile
+import shutil, subprocess, tempfile
 from pathlib import Path
 from huggingface_hub import hf_hub_download
 
-rvc_dir = Path.home() / ".local/share/omarchy/selective-reading/rvc_models"
-hf_hub_download("lj1995/VoiceConversionWebUI", "rmvpe.pt")
-for fname in ("hubert_base/config.json", "hubert_base/preprocessor_config.json", "hubert_base/pytorch_model.bin"):
-    hf_hub_download("lj1995/VoiceConversionWebUI", fname)
+data_dir = Path.home() / ".local/share/omarchy/selective-reading"
+f5_dir = data_dir / "models/f5_tts"
+vocos_dir = f5_dir / "vocos"
+rvc_dir = data_dir / "rvc_models"
+f5_dir.mkdir(parents=True, exist_ok=True)
+vocos_dir.mkdir(parents=True, exist_ok=True)
+rvc_dir.mkdir(parents=True, exist_ok=True)
+
+ckpt = hf_hub_download("SWivid/F5-TTS", "F5TTS_v1_Base/model_1250000.safetensors")
+shutil.copy2(ckpt, f5_dir / "model_1250000.safetensors")
+for fname in ("config.yaml", "pytorch_model.bin"):
+    vf = hf_hub_download("charactr/vocos-mel-24khz", fname)
+    shutil.copy2(vf, vocos_dir / fname)
+
+rmvpe_f = hf_hub_download("lj1995/VoiceConversionWebUI", "rmvpe.pt")
+shutil.copy2(rmvpe_f, rvc_dir / "rmvpe.pt")
+hb_dir = rvc_dir / "hubert_base"
+hb_dir.mkdir(parents=True, exist_ok=True)
+for fname in ("config.json", "preprocessor_config.json", "pytorch_model.bin"):
+    f = hf_hub_download("lj1995/VoiceConversionWebUI", f"hubert_base/{fname}")
+    shutil.copy2(f, hb_dir / fname)
 
 models = [
     ("morgan_freeman", "Supanovah/MorganFreeman", "MorganFreeman_e440_s4840.zip"),
     ("stephen_fry", "imbetter/stephenfry64", "StephenFry64.zip"),
+    ("matthew_mcconaughey", "RoyalAce/matthew_mcconaughey_rvc_v2_48k_1.05k_epoch", "matthew_mcconaughey.7z"),
 ]
 for vid, repo, zname in models:
     vdir = rvc_dir / vid
     vdir.mkdir(parents=True, exist_ok=True)
     zpath = hf_hub_download(repo, zname)
-    with zipfile.ZipFile(zpath) as zf:
-        for member in zf.namelist():
-            if member.endswith((".pth", ".index")) and not Path(member).name.startswith("."):
-                with zf.open(member) as src, open(vdir / Path(member).name, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        subprocess.run(["bsdtar", "-xf", zpath, "-C", tmpdir], check=True)
+        for f in Path(tmpdir).rglob("*"):
+            if f.is_file() and f.suffix in (".pth", ".index") and not f.name.startswith("."):
+                shutil.copy2(f, vdir / f.name)
 """
         subprocess.run([str(VENV_PYTHON), "-c", dl_code], check=True)
 
@@ -1063,7 +1172,7 @@ def main() -> None:
         if idx + 1 < len(sys.argv) and sys.argv[idx + 1].startswith("-"):
             sys.argv[idx : idx + 2] = [f"--rate={sys.argv[idx + 1]}"]
 
-    parser = argparse.ArgumentParser(prog="selective-reading", description="Selective Reading Kokoro-82M + GPU RVC v2 TTS controller")
+    parser = argparse.ArgumentParser(prog="selective-reading", description="Selective Reading F5-TTS + GPU RVC v2 TTS controller")
     sub = parser.add_subparsers(dest="cmd")
 
     read_p = sub.add_parser("read", help="Read selected text or provided text")
@@ -1073,7 +1182,7 @@ def main() -> None:
     sub.add_parser("toggle", help="Toggle reading selected text / stop if playing")
     sub.add_parser("pause", help="Toggle pause / resume on current playback")
     sub.add_parser("resume", help="Resume paused playback")
-    sub.add_parser("setup", help="Set up Kokoro-82M + RVC v2 GPU celebrity models and warm daemon")
+    sub.add_parser("setup", help="Set up F5-TTS + RVC v2 GPU celebrity models and warm daemon")
 
     prev_p = sub.add_parser("preview", help="Preview a celebrity voice")
     prev_p.add_argument("voice", nargs="?", default=None, help="Voice ID to preview")
@@ -1109,7 +1218,7 @@ def main() -> None:
     if cmd == "setup":
         setup_environment(show_notifications=False)
         write_state(get_running_pid() is not None)
-        print(f"Kokoro-82M + RVC v2 celebrity models ready in {RVC_DIR} (GPU daemon warm)")
+        print(f"F5-TTS + RVC v2 celebrity models ready in {RVC_DIR} (GPU daemon warm)")
         return
 
     if cmd == "stop":
@@ -1149,6 +1258,8 @@ def main() -> None:
         voice = args.voice if args.voice in VOICES else cfg["voice"]
         if voice == "morgan_freeman":
             sample = "Hello. I am Morgan Freeman, and I will be narrating your selected text."
+        elif voice == "matthew_mcconaughey":
+            sample = "Alright, alright, alright. I am Matthew McConaughey, and I will be reading whatever you highlight on your screen."
         else:
             sample = "Hello there! I am Stephen Fry, ready to read whatever you highlight on your screen."
         spawn_reader(sample, voice, cfg["rate"], show_notification=False)
