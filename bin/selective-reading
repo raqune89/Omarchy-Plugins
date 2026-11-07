@@ -601,6 +601,8 @@ def ensure_daemon_running(show_notifications: bool = True) -> bool:
 
 
 def run_daemon() -> None:
+    sys.argv = [sys.argv[0]]
+    os.environ["HF_HUB_OFFLINE"] = "1"
     import asyncio
     import numpy as np
     import torch
@@ -950,6 +952,23 @@ def load_hubert(config):
             if "weights_only=False" not in ftxt:
                 ftxt = re.sub(r"torch\.load\(([^)]+)\)", r"torch.load(\1, weights_only=False)", ftxt)
                 fpath.write_text(ftxt, encoding="utf-8")
+
+    cfg_py = infer_dir / "configs" / "config.py"
+    if cfg_py.exists():
+        ctxt = cfg_py.read_text(encoding="utf-8")
+        if "parser.parse_args()" in ctxt:
+            ctxt = ctxt.replace("cmd_opts = parser.parse_args()", "cmd_opts, _ = parser.parse_known_args()")
+            cfg_py.write_text(ctxt, encoding="utf-8")
+
+    pipe_py = infer_dir / "pipeline.py"
+    if pipe_py.exists():
+        ptxt = pipe_py.read_text(encoding="utf-8")
+        if 'hf_hub_download("lj1995/VoiceConversionWebUI", "rmvpe.pt")' in ptxt:
+            ptxt = ptxt.replace(
+                'hf_hub_download("lj1995/VoiceConversionWebUI", "rmvpe.pt")',
+                'os.path.expanduser("~/.local/share/omarchy/selective-reading/rvc_models/rmvpe.pt")',
+            )
+            pipe_py.write_text(ptxt, encoding="utf-8")
 
 
 def setup_environment(show_notifications: bool = False) -> None:
