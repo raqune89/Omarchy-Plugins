@@ -14,7 +14,6 @@ Panel {
   property bool vpnActive: false
   property string vpnLatency: "--"
   property string vpnType: "Disconnected"
-  property var ovpnProfiles: []
 
   Process {
     id: vpnChecker
@@ -29,27 +28,6 @@ Panel {
         else if (str.indexOf("thm") >= 0 || str.indexOf("tryhackme") >= 0 || str.indexOf("regular.ovpn") >= 0) root.vpnType = "TryHackMe / CTF"
         else if (root.vpnActive) root.vpnType = "OpenVPN Tunnel"
         else root.vpnType = "Disconnected"
-      }
-    }
-  }
-
-  Process {
-    id: profileScanner
-    command: ["sh", "-c", "find ~/Documents ~/htb ~/Downloads ~ -maxdepth 2 -type f -name '*.ovpn' 2>/dev/null | awk '!seen[$0]++' | head -n 5"]
-    running: false
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var lines = text.trim().split("\n")
-        var list = []
-        for (var i = 0; i < lines.length; i++) {
-          var p = lines[i].trim()
-          if (p !== "") {
-            var base = p.split("/").pop()
-            list.push({ path: p, name: base })
-          }
-        }
-        root.ovpnProfiles = list
       }
     }
   }
@@ -75,53 +53,46 @@ Panel {
     onTriggered: {
       if (!vpnChecker.running) vpnChecker.running = true
       if (!pingChecker.running) pingChecker.running = true
-      if (!profileScanner.running) profileScanner.running = true
     }
   }
 
-  function launchOpenVpnTerminal() {
-    var script = "for d in \"$HOME/htb\" \"$HOME/Documents/THM\" \"$HOME/Documents\" \"$HOME/Downloads\" \"$HOME\"; do " +
-                 "if [ -d \"$d\" ] && ls \"$d\"/*.ovpn >/dev/null 2>&1; then cd \"$d\"; break; fi; " +
-                 "done; " +
-                 "echo '=== CTF OpenVPN Profiles ==='; " +
-                 "ls -1 *.ovpn 2>/dev/null || find ~/Documents ~/htb ~/Downloads -maxdepth 2 -name '*.ovpn' 2>/dev/null; " +
-                 "echo ''; echo 'Run: sudo openvpn --config <profile.ovpn>'; echo ''; exec bash"
+  function connectThmVpn() {
+    var cmd = "echo $$ > /tmp/omarchy-thmvpn-term.pid; " +
+              "shopt -s expand_aliases; " +
+              "[ -f ~/.bashrc ] && source ~/.bashrc; " +
+              "echo '==> Running THMvpn...'; " +
+              "THMvpn; " +
+              "echo '[+] THMvpn connected in background.'; " +
+              "exec bash -i"
     Util.execArgv([
       "setsid",
       "uwsm-app",
       "--",
       "xdg-terminal-exec",
-      "--app-id=org.omarchy.terminal",
-      "--title=OpenVPN Terminal",
+      "--app-id=org.omarchy.thmvpn",
+      "--title=THMvpn",
       "-e",
       "bash",
-      "-c",
-      script
+      "-ic",
+      cmd
     ])
-    root.close()
-  }
-
-  function connectProfile(ovpnPath) {
-    var escaped = String(ovpnPath).replace(/(["\\$`])/g, "\\$1")
-    var script = "echo \"Connecting OpenVPN: " + escaped + "\"; sudo openvpn --config \"" + escaped + "\"; exec bash"
-    Util.execArgv([
-      "setsid",
-      "uwsm-app",
-      "--",
-      "xdg-terminal-exec",
-      "--app-id=org.omarchy.terminal",
-      "--title=OpenVPN Tunnel",
-      "-e",
-      "bash",
-      "-c",
-      script
-    ])
-    root.close()
-  }
-
-  function disconnectVpn() {
-    Util.execArgv(["sh", "-c", "sudo -n pkill openvpn 2>/dev/null || pkexec pkill openvpn"])
     vpnChecker.running = true
+    root.close()
+  }
+
+  function disconnectThmVpn() {
+    var stopCmd = "shopt -s expand_aliases; " +
+                  "[ -f ~/.bashrc ] && source ~/.bashrc; " +
+                  "THMstop 2>/dev/null || sudo -n pkill openvpn 2>/dev/null; " +
+                  "hyprctl dispatch closewindow class:org.omarchy.thmvpn >/dev/null 2>&1 || true; " +
+                  "if [ -f /tmp/omarchy-thmvpn-term.pid ]; then " +
+                  "  tpid=$(cat /tmp/omarchy-thmvpn-term.pid 2>/dev/null); " +
+                  "  [ -n \"$tpid\" ] && kill -TERM \"$tpid\" 2>/dev/null || true; " +
+                  "  rm -f /tmp/omarchy-thmvpn-term.pid; " +
+                  "fi"
+    Util.execArgv(["bash", "-ic", stopCmd])
+    vpnChecker.running = true
+    root.close()
   }
 
   BarIconButton {
@@ -139,7 +110,7 @@ Panel {
       }
     }
     onPressed: function(b) {
-      if (!profileScanner.running) profileScanner.running = true
+      if (!vpnChecker.running) vpnChecker.running = true
       root.toggle()
     }
   }
@@ -151,7 +122,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(340))
+    contentWidth: panel.fittedContentWidth(Style.space(320))
     contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
     PanelKeyCatcher {
@@ -165,7 +136,7 @@ Panel {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        spacing: Style.space(10)
+        spacing: Style.space(12)
 
         PanelHero {
           width: parent.width
@@ -191,44 +162,16 @@ Panel {
           spacing: Style.space(8)
 
           Button {
-            text: "OpenVPN Terminal"
+            text: "Connect (THMvpn)"
             bordered: true
-            onClicked: root.launchOpenVpnTerminal()
+            selected: root.vpnActive
+            onClicked: root.connectThmVpn()
           }
 
           Button {
-            visible: root.vpnActive
-            text: "Disconnect"
+            text: "Disconnect (THMstop)"
             bordered: true
-            onClicked: root.disconnectVpn()
-          }
-        }
-
-        PanelSeparator {
-          visible: root.ovpnProfiles.length > 0
-          foreground: Commons.Color.foreground
-        }
-
-        PanelSectionHeader {
-          visible: root.ovpnProfiles.length > 0
-          text: "DISCOVERED PROFILES (.OVPN)"
-          foreground: Commons.Color.foreground
-        }
-
-        Column {
-          visible: root.ovpnProfiles.length > 0
-          width: parent.width
-          spacing: Style.space(6)
-
-          Repeater {
-            model: root.ovpnProfiles
-            delegate: Button {
-              required property var modelData
-              width: column.width
-              text: "Connect: " + modelData.name
-              bordered: true
-              onClicked: root.connectProfile(modelData.path)
-            }
+            onClicked: root.disconnectThmVpn()
           }
         }
       }
