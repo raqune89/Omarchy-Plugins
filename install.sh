@@ -57,11 +57,13 @@ fi
 echo "==> Rendering CAD icons to match current Omarchy theme..."
 "${HOOKS_DEST}/20-sync-cad-icons" || true
 
-# 7. Reload Hyprland and Omarchy Shell plugins
+# 7. Reload Hyprland and restart Omarchy Shell so updated QML plugins load cleanly
 if command -v hyprctl >/dev/null 2>&1; then
   hyprctl reload >/dev/null 2>&1 || true
 fi
-if command -v omarchy-shell >/dev/null 2>&1; then
+if command -v omarchy >/dev/null 2>&1; then
+  omarchy restart shell >/dev/null 2>&1 || true
+elif command -v omarchy-shell >/dev/null 2>&1; then
   omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 fi
 

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "raqune.selective-reading",
   "name": "Selective Reading",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": "raqune",
   "description": "Read aloud selected text with realistic neural voices",
   "kinds": [
