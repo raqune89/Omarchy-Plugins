@@ -1,69 +1,49 @@
-#!/usr/bin/env -S uv run --quiet --with kokoro-onnx python3
+#!/usr/bin/env python3
 import argparse
-import asyncio
 from html.parser import HTMLParser
 import json
 import os
 import re
+import shutil
 import signal
 import socket
+import struct
 import subprocess
 import sys
+import tempfile
 import time
-import urllib.request
 from pathlib import Path
-
-from kokoro_onnx import Kokoro
-import numpy as np
 
 HOME = Path.home()
 CONFIG_DIR = HOME / ".config" / "omarchy" / "selective-reading"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 STATE_DIR = HOME / ".local" / "state" / "omarchy" / "selective-reading"
 STATE_FILE = STATE_DIR / "state.json"
-MODEL_DIR = HOME / ".local" / "share" / "omarchy" / "selective-reading" / "models"
-MODEL_FILE = MODEL_DIR / "kokoro-v1.0.onnx"
-VOICES_FILE = MODEL_DIR / "voices-v1.0.bin"
-MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
-VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+DATA_DIR = HOME / ".local" / "share" / "omarchy" / "selective-reading"
+VENV_DIR = DATA_DIR / "venv"
+VENV_PYTHON = VENV_DIR / "bin" / "python"
+VOICES_DIR = DATA_DIR / "voices"
+
 PID_FILE = Path("/tmp/selective-reading.pid")
+DAEMON_PID_FILE = Path("/tmp/selective-reading-daemon.pid")
+DAEMON_SOCKET = Path("/tmp/selective-reading-daemon.sock")
 MPV_IPC_SOCKET = Path("/tmp/selective-reading-mpv.sock")
 
 VOICES = {
-    "af_heart": {
-        "name": "Heart",
-        "desc": "Warm, Expressive Studio (US Female)",
-        "lang": "en-us",
+    "morgan_freeman": {
+        "name": "Morgan Freeman",
+        "desc": "Deep, Iconic Narrator (US Male)",
+        "lang": "en",
     },
-    "af_bella": {
-        "name": "Bella",
-        "desc": "Natural, Conversational (US Female)",
-        "lang": "en-us",
-    },
-    "am_michael": {
-        "name": "Michael",
-        "desc": "Deep, Podcast Host (US Male)",
-        "lang": "en-us",
-    },
-    "am_adam": {
-        "name": "Adam",
-        "desc": "Clear, Engaging Narrator (US Male)",
-        "lang": "en-us",
-    },
-    "bf_emma": {
-        "name": "Emma",
-        "desc": "Refined, Studio Narrator (UK Female)",
-        "lang": "en-gb",
-    },
-    "bm_george": {
-        "name": "George",
+    "stephen_fry": {
+        "name": "Stephen Fry",
         "desc": "Warm, Classic Audiobook (UK Male)",
-        "lang": "en-gb",
+        "lang": "en",
     },
 }
 
 DEFAULT_CONFIG = {
-    "voice": "af_heart",
+    "voice": "morgan_freeman",
     "rate": "+0%",
 }
 
@@ -148,7 +128,6 @@ class _StructuredHTMLParser(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._ignore_depth > 0:
             return
-        # Collapse internal newlines inside a single HTML text node into spaces
         cleaned = re.sub(r"\s+", " ", data)
         if cleaned:
             self.parts.append(cleaned)
@@ -182,11 +161,8 @@ def _looks_like_heading(line: str, next_line: str | None) -> bool:
     s = line.strip()
     if not s or s.endswith(TERMINAL_PUNCT) or s.endswith(","):
         return False
-    # Short standalone line before a blank line is a heading/title
     if next_line is None or next_line.strip() == "":
         return len(s) <= 120
-    # If followed immediately by another line without a blank line:
-    # Check if this line is short and doesn't end with a soft continuation word
     words = s.split()
     if 1 <= len(words) <= 8 and len(s) <= 65:
         last_word = re.sub(r"[^a-zA-Z]", "", words[-1]).lower()
@@ -198,11 +174,10 @@ def _looks_like_heading(line: str, next_line: str | None) -> bool:
 
 def format_text_for_speech(raw: str) -> str:
     text = raw.replace("\r\n", "\n").replace("\r", "\n")
-    # Strip markdown inline backticks
     text = text.replace("`", "")
 
     raw_lines = text.split("\n")
-    normalized_lines: list[tuple[str, str]] = []  # (kind, text) where kind is 'blank', 'heading', 'item', 'text'
+    normalized_lines: list[tuple[str, str]] = []
 
     for line in raw_lines:
         stripped = re.sub(r"[ \t]+", " ", line).strip()
@@ -210,19 +185,16 @@ def format_text_for_speech(raw: str) -> str:
             normalized_lines.append(("blank", ""))
             continue
 
-        # Markdown headings: # Title
         m_head = re.match(r"^#{1,6}\s+(.*)$", stripped)
         if m_head:
             normalized_lines.append(("heading", _ensure_sentence_end(m_head.group(1))))
             continue
 
-        # Bullet list items: • GET, - GET, * GET
         m_bullet = re.match(r"^[•●◦▪▸▹–—*-]\s*(.+)$", stripped)
         if m_bullet:
             normalized_lines.append(("item", _ensure_sentence_end(m_bullet.group(1))))
             continue
 
-        # Numbered list items: 1. First, 2) Second
         m_num = re.match(r"^(\d+)[.)]\s+(.+)$", stripped)
         if m_num:
             normalized_lines.append(("item", f"{m_num.group(1)}. {_ensure_sentence_end(m_num.group(2))}"))
@@ -230,7 +202,6 @@ def format_text_for_speech(raw: str) -> str:
 
         normalized_lines.append(("text", stripped))
 
-    # Second pass: detect standalone headings/titles and short list-like lines
     out_blocks: list[str] = []
     current_para: list[str] = []
 
@@ -261,7 +232,6 @@ def format_text_for_speech(raw: str) -> str:
             out_blocks.append(content)
             continue
 
-        # Plain 'text' line: check if it's an indented/unbulleted short item list (e.g. GET / POST / PUT)
         words = content.split()
         is_short_token = len(words) <= 4 and len(content) <= 40 and not content.endswith(TERMINAL_PUNCT)
         if is_short_token and (prev_kind in ("blank", "item") or next_kind in ("blank", "item")):
@@ -269,7 +239,6 @@ def format_text_for_speech(raw: str) -> str:
             out_blocks.append(_ensure_sentence_end(content))
             continue
 
-        # Check if this line is a heading/title before a blank line or new paragraph
         if not current_para and _looks_like_heading(content, None if next_kind == "blank" else next_content):
             out_blocks.append(_ensure_sentence_end(content))
             continue
@@ -328,7 +297,7 @@ def load_state() -> dict:
         "isPlaying": False,
         "isPaused": False,
         "voice": voice_id,
-        "voiceName": VOICES.get(voice_id, {}).get("name", "Heart"),
+        "voiceName": VOICES.get(voice_id, {}).get("name", "Morgan Freeman"),
         "rate": cfg["rate"],
         "textSnippet": "",
         "updatedAt": int(time.time()),
@@ -353,7 +322,7 @@ def write_state(
         "isPlaying": is_playing,
         "isPaused": paused_val,
         "voice": voice_id,
-        "voiceName": VOICES.get(voice_id, {}).get("name", "Heart"),
+        "voiceName": VOICES.get(voice_id, {}).get("name", "Morgan Freeman"),
         "rate": cfg["rate"],
         "textSnippet": snippet if snippet is not None else prev.get("textSnippet", ""),
         "updatedAt": int(time.time()),
@@ -386,16 +355,16 @@ def notify(title: str, body: str) -> None:
         pass
 
 
-def get_running_pid() -> int | None:
-    if not PID_FILE.exists():
+def get_running_pid(pid_file: Path = PID_FILE) -> int | None:
+    if not pid_file.exists():
         return None
     try:
-        pid = int(PID_FILE.read_text(encoding="utf-8").strip())
+        pid = int(pid_file.read_text(encoding="utf-8").strip())
         os.kill(pid, 0)
         return pid
     except Exception:
         try:
-            PID_FILE.unlink(missing_ok=True)
+            pid_file.unlink(missing_ok=True)
         except Exception:
             pass
         return None
@@ -512,7 +481,6 @@ def _fingerprint(s: str) -> str:
 
 
 def get_selected_text() -> str:
-    # Try primary selection first, then regular clipboard
     for extra_args in (["--primary"], []):
         plain = ""
         try:
@@ -532,7 +500,6 @@ def get_selected_text() -> str:
         if not plain:
             continue
 
-        # Check if text/html is also available for richer structural formatting
         try:
             types_res = subprocess.run(
                 ["wl-paste", *extra_args, "--list-types"],
@@ -570,32 +537,220 @@ def rate_to_speed(rate: str) -> float:
     return max(0.5, min(2.0, 1.0 + (pct / 100.0)))
 
 
-def ensure_models(show_notifications: bool = True) -> None:
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    missing = [
-        (VOICES_FILE, VOICES_URL, "voices-v1.0.bin"),
-        (MODEL_FILE, MODEL_URL, "kokoro-v1.0.onnx"),
-    ]
-    needs_download = any(not f.exists() or f.stat().st_size < 1024 for f, _, _ in missing)
-    if needs_download and show_notifications:
-        notify("Selective Reading", "Downloading Kokoro-82M voice pack (first-time setup)…")
-    for dest, url, label in missing:
-        if dest.exists() and dest.stat().st_size >= 1024:
-            continue
-        tmp = dest.with_suffix(".part")
-        urllib.request.urlretrieve(url, str(tmp))
-        tmp.replace(dest)
+def _daemon_is_ready() -> bool:
+    if not DAEMON_SOCKET.exists():
+        return False
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            s.connect(str(DAEMON_SOCKET))
+            s.sendall((json.dumps({"cmd": "ping"}) + "\n").encode("utf-8"))
+            resp = s.recv(64)
+            return b"pong" in resp
+    except Exception:
+        return False
 
 
-async def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
+def ensure_daemon_running(show_notifications: bool = True) -> bool:
+    if _daemon_is_ready():
+        return True
+
+    if not VENV_PYTHON.exists():
+        if show_notifications:
+            notify("Selective Reading", "Running first-time voice cloning setup…")
+        setup_environment(show_notifications=show_notifications)
+
+    if get_running_pid(DAEMON_PID_FILE) is None:
+        if show_notifications:
+            notify("Selective Reading", "Warming up GPU voice-cloning engine…")
+        proc = subprocess.Popen(
+            [str(VENV_PYTHON), str(Path(__file__).resolve()), "_daemon"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        DAEMON_PID_FILE.write_text(str(proc.pid), encoding="utf-8")
+
+    for _ in range(180):
+        if _daemon_is_ready():
+            return True
+        time.sleep(0.25)
+    return False
+
+
+def _find_xtts_snapshot_dir() -> Path | None:
+    hf_dir = HOME / ".cache" / "huggingface" / "hub" / "models--tts-hub--XTTS-v2" / "snapshots"
+    if hf_dir.exists():
+        snaps = sorted(p for p in hf_dir.iterdir() if (p / "model.pth").exists() and (p / "config.json").exists())
+        if snaps:
+            return snaps[-1]
+    return None
+
+
+def run_daemon() -> None:
+    os.environ["COQUI_TOS_AGREED"] = "1"
+    import numpy as np
+    import torch
+    from TTS.tts.configs.xtts_config import XttsConfig
+    from TTS.tts.models.xtts import Xtts
+    from TTS.utils.manage import ModelManager
+
+    my_pid = os.getpid()
+    DAEMON_PID_FILE.write_text(str(my_pid), encoding="utf-8")
+
+    try:
+        DAEMON_SOCKET.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    model_dir = _find_xtts_snapshot_dir()
+    if model_dir is None:
+        manager = ModelManager()
+        model_path, _, _ = manager.download_model("tts_models/multilingual/multi-dataset/xtts_v2")
+        model_dir = Path(model_path) if Path(model_path).is_dir() else Path(model_path).parent
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    config = XttsConfig()
+    config.load_json(str(model_dir / "config.json"))
+    model = Xtts(config)
+    model.load_checkpoint(config, checkpoint_dir=str(model_dir), eval=True)
+    model.to(device)
+
+    latents_cache: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
+
+    def get_voice_latents(voice_id: str) -> tuple[torch.Tensor, torch.Tensor]:
+        pt_file = VOICES_DIR / f"{voice_id}.pt"
+        wav_file = VOICES_DIR / f"{voice_id}.wav"
+        if voice_id in latents_cache:
+            return latents_cache[voice_id]
+        if pt_file.exists():
+            data = torch.load(pt_file, map_location=device, weights_only=True)
+            pair = (data["gpt_cond_latent"].to(device), data["speaker_embedding"].to(device))
+            latents_cache[voice_id] = pair
+            return pair
+        if wav_file.exists():
+            gpt_cond_latent, speaker_embedding = model.get_conditioning_latents(
+                audio_path=[str(wav_file)],
+                gpt_cond_len=30,
+                gpt_cond_chunk_len=6,
+                max_ref_length=30,
+            )
+            torch.save(
+                {
+                    "gpt_cond_latent": gpt_cond_latent.cpu(),
+                    "speaker_embedding": speaker_embedding.cpu(),
+                },
+                pt_file,
+            )
+            pair = (gpt_cond_latent.to(device), speaker_embedding.to(device))
+            latents_cache[voice_id] = pair
+            return pair
+        raise FileNotFoundError(f"Missing voice reference for {voice_id}")
+
+    for vid in VOICES:
+        try:
+            get_voice_latents(vid)
+        except Exception:
+            pass
+
+    # Warm up CUDA kernels so first user request starts in ~250ms
+    if latents_cache:
+        first_vid = next(iter(latents_cache))
+        g_lat, s_emb = latents_cache[first_vid]
+        try:
+            with torch.inference_mode():
+                for _ in model.inference_stream("Ready.", "en", g_lat, s_emb, stream_chunk_size=20):
+                    break
+        except Exception:
+            pass
+
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(str(DAEMON_SOCKET))
+    server.listen(4)
+
+    def cleanup_and_exit(signum, frame):
+        try:
+            server.close()
+        except Exception:
+            pass
+        try:
+            DAEMON_SOCKET.unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, cleanup_and_exit)
+    signal.signal(signal.SIGINT, cleanup_and_exit)
+
+    while True:
+        conn, _ = server.accept()
+        with conn:
+            try:
+                buf = b""
+                while b"\n" not in buf:
+                    chunk = conn.recv(4096)
+                    if not chunk:
+                        break
+                    buf += chunk
+                if not buf:
+                    continue
+                req = json.loads(buf.decode("utf-8").splitlines()[0])
+                cmd = req.get("cmd")
+                if cmd == "ping":
+                    conn.sendall(b"pong\n")
+                    continue
+                if cmd == "reload_voice":
+                    vid = req.get("voice", "")
+                    latents_cache.pop(vid, None)
+                    get_voice_latents(vid)
+                    conn.sendall(b"ok\n")
+                    continue
+                if cmd != "stream":
+                    continue
+
+                text = str(req.get("text", "")).strip()
+                voice = str(req.get("voice", DEFAULT_CONFIG["voice"]))
+                speed = float(req.get("speed", 1.0))
+                if voice not in VOICES:
+                    voice = DEFAULT_CONFIG["voice"]
+
+                gpt_cond_latent, speaker_embedding = get_voice_latents(voice)
+                blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
+                silence_pcm = np.zeros(int(24000 * 0.38), dtype="<f4").tobytes()
+
+                with torch.inference_mode():
+                    for idx, block in enumerate(blocks):
+                        stream = model.inference_stream(
+                            block,
+                            VOICES[voice]["lang"],
+                            gpt_cond_latent,
+                            speaker_embedding,
+                            speed=speed,
+                            stream_chunk_size=20,
+                            enable_text_splitting=True,
+                        )
+                        for audio_chunk in stream:
+                            pcm = audio_chunk.detach().cpu().numpy().astype("<f4").tobytes()
+                            conn.sendall(pcm)
+                        if idx < len(blocks) - 1:
+                            conn.sendall(silence_pcm)
+            except (BrokenPipeError, ConnectionResetError):
+                continue
+            except Exception:
+                continue
+
+
+def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
     try:
         MPV_IPC_SOCKET.unlink(missing_ok=True)
     except Exception:
         pass
-    ensure_models(show_notifications=True)
-    kokoro = Kokoro(str(MODEL_FILE), str(VOICES_FILE))
+
+    if not ensure_daemon_running(show_notifications=True):
+        raise RuntimeError("GPU TTS daemon failed to start")
+
     speed = rate_to_speed(rate)
-    lang = VOICES.get(voice, {}).get("lang", "en-us")
 
     mpv_proc = subprocess.Popen(
         [
@@ -618,31 +773,20 @@ async def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
         stderr=subprocess.DEVNULL,
     )
     try:
-        blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
-        silence_pcm = np.zeros(int(24000 * 0.42), dtype="<f4").tobytes()
-        for idx, block in enumerate(blocks):
-            if mpv_proc.poll() is not None:
-                break
-            async for samples, _sr in kokoro.create_stream(
-                block,
-                voice=voice,
-                speed=speed,
-                lang=lang,
-            ):
-                if mpv_proc.poll() is not None:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(str(DAEMON_SOCKET))
+            req = {"cmd": "stream", "text": text, "voice": voice, "speed": speed}
+            sock.sendall((json.dumps(req) + "\n").encode("utf-8"))
+            while mpv_proc.poll() is None:
+                data = sock.recv(16384)
+                if not data:
                     break
-                pcm = np.asarray(samples, dtype="<f4").tobytes()
-                try:
-                    mpv_proc.stdin.write(pcm)
-                    mpv_proc.stdin.flush()
-                except (BrokenPipeError, OSError):
-                    break
-            if idx < len(blocks) - 1 and mpv_proc.poll() is None:
-                try:
-                    mpv_proc.stdin.write(silence_pcm)
-                    mpv_proc.stdin.flush()
-                except (BrokenPipeError, OSError):
-                    break
+                if mpv_proc.stdin:
+                    try:
+                        mpv_proc.stdin.write(data)
+                        mpv_proc.stdin.flush()
+                    except (BrokenPipeError, OSError):
+                        break
         if mpv_proc.stdin:
             try:
                 mpv_proc.stdin.close()
@@ -677,7 +821,7 @@ def run_worker(text: str, voice: str, rate: str) -> None:
     write_state(True, snippet, is_paused=False)
 
     try:
-        asyncio.run(stream_tts_to_mpv(text, voice, rate))
+        stream_tts_to_mpv(text, voice, rate)
     except (SystemExit, KeyboardInterrupt):
         pass
     except Exception as exc:
@@ -730,6 +874,219 @@ def spawn_reader(text: str, voice: str, rate: str, show_notification: bool = Tru
     PID_FILE.write_text(str(proc.pid), encoding="utf-8")
 
 
+def _prepare_default_voice_samples() -> None:
+    VOICES_DIR.mkdir(parents=True, exist_ok=True)
+    mf_wav = VOICES_DIR / "morgan_freeman.wav"
+    sf_wav = VOICES_DIR / "stephen_fry.wav"
+
+    if not mf_wav.exists() or mf_wav.stat().st_size < 10000:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            raw_out = Path(tmpdir) / "mf_raw.wav"
+            subprocess.run(
+                [
+                    "yt-dlp",
+                    "-x",
+                    "--audio-format",
+                    "wav",
+                    "-o",
+                    str(Path(tmpdir) / "mf_raw.%(ext)s"),
+                    "https://www.youtube.com/watch?v=-fL17_6Zocs",
+                ],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(raw_out),
+                    "-filter_complex",
+                    "[0:a]atrim=start=2.95:end=12.15,asetpts=PTS-STARTPTS[a1];"
+                    "[0:a]atrim=start=14.55:end=19.25,asetpts=PTS-STARTPTS[a2];"
+                    "[0:a]atrim=start=26.10:end=35.40,asetpts=PTS-STARTPTS[a3];"
+                    "[a1][a2][a3]concat=n=3:v=0:a=1,highpass=f=75,loudnorm=I=-16:TP=-1.5:LRA=11[out]",
+                    "-map",
+                    "[out]",
+                    "-ac",
+                    "1",
+                    "-ar",
+                    "24000",
+                    "-c:a",
+                    "pcm_s16le",
+                    str(mf_wav),
+                ],
+                check=True,
+            )
+
+    if not sf_wav.exists() or sf_wav.stat().st_size < 10000:
+        subprocess.run(
+            [
+                str(VENV_PYTHON),
+                "-c",
+                "from huggingface_hub import hf_hub_download; import subprocess, os; "
+                "segs = [hf_hub_download(repo_id='smfreeze/50-words-stephen-fry', filename=f'segment_{i}.mp3', repo_type='dataset') for i in (1, 2, 3)]; "
+                "inputs = [arg for s in segs for arg in ('-i', s)]; "
+                "subprocess.run(['ffmpeg', '-y', *inputs, '-filter_complex', '[0:a][1:a][2:a]concat=n=3:v=0:a=1,highpass=f=75,loudnorm=I=-16:TP=-1.5:LRA=11[out]', '-map', '[out]', '-ac', '1', '-ar', '24000', '-c:a', 'pcm_s16le', os.path.expanduser('~/.local/share/omarchy/selective-reading/voices/stephen_fry.wav')], check=True)",
+            ],
+            check=True,
+        )
+
+
+def _compute_latents_in_venv(voice_ids: list[str]) -> None:
+    code = """
+import os, sys, torch
+from pathlib import Path
+from TTS.tts.configs.xtts_config import XttsConfig
+from TTS.tts.models.xtts import Xtts
+from TTS.utils.manage import ModelManager
+
+os.environ["COQUI_TOS_AGREED"] = "1"
+voices_dir = Path.home() / ".local/share/omarchy/selective-reading/voices"
+hf_dir = Path.home() / ".cache/huggingface/hub/models--tts-hub--XTTS-v2/snapshots"
+model_dir = None
+if hf_dir.exists():
+    snaps = sorted(p for p in hf_dir.iterdir() if (p / "model.pth").exists())
+    if snaps:
+        model_dir = snaps[-1]
+if model_dir is None:
+    manager = ModelManager()
+    mp, _, _ = manager.download_model("tts_models/multilingual/multi-dataset/xtts_v2")
+    model_dir = Path(mp) if Path(mp).is_dir() else Path(mp).parent
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+config = XttsConfig()
+config.load_json(str(model_dir / "config.json"))
+model = Xtts(config)
+model.load_checkpoint(config, checkpoint_dir=str(model_dir), eval=True)
+model.to(device)
+
+for vid in sys.argv[1:]:
+    wav_path = voices_dir / f"{vid}.wav"
+    pt_path = voices_dir / f"{vid}.pt"
+    if not wav_path.exists():
+        continue
+    gpt_cond_latent, speaker_embedding = model.get_conditioning_latents(
+        audio_path=[str(wav_path)],
+        gpt_cond_len=30,
+        gpt_cond_chunk_len=6,
+        max_ref_length=30,
+    )
+    torch.save({
+        "gpt_cond_latent": gpt_cond_latent.cpu(),
+        "speaker_embedding": speaker_embedding.cpu(),
+    }, pt_path)
+    print(f"Computed speaker latents: {pt_path}")
+"""
+    subprocess.run([str(VENV_PYTHON), "-c", code, *voice_ids], check=True)
+
+
+def setup_environment(show_notifications: bool = False) -> None:
+    VOICES_DIR.mkdir(parents=True, exist_ok=True)
+    if not VENV_PYTHON.exists():
+        if show_notifications:
+            notify("Selective Reading", "Creating Python 3.12 GPU voice-cloning environment…")
+        subprocess.run(
+            ["uv", "venv", "--python", "3.12", str(VENV_DIR), "--allow-existing"],
+            check=True,
+        )
+        subprocess.run(
+            [
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                str(VENV_PYTHON),
+                "coqui-tts[codec]>=0.25.0",
+                "torch",
+                "torchaudio",
+                "numpy",
+                "soundfile",
+                "six",
+            ],
+            check=True,
+        )
+
+    _prepare_default_voice_samples()
+    missing_latents = [
+        vid for vid in VOICES if not (VOICES_DIR / f"{vid}.pt").exists()
+    ]
+    if missing_latents or _find_xtts_snapshot_dir() is None:
+        if show_notifications:
+            notify("Selective Reading", "Computing GPU voice latents for Morgan Freeman & Stephen Fry…")
+        _compute_latents_in_venv(list(VOICES.keys()))
+
+    ensure_daemon_running(show_notifications=False)
+
+
+def clone_voice_from_source(voice_id: str, source: str, start_sec: float = 0.0, duration_sec: float = 25.0) -> None:
+    if voice_id not in VOICES:
+        print(f"Unsupported voice ID '{voice_id}'. Choose from: {', '.join(VOICES)}", file=sys.stderr)
+        sys.exit(1)
+
+    setup_environment(show_notifications=False)
+    dest_wav = VOICES_DIR / f"{voice_id}.wav"
+    dest_pt = VOICES_DIR / f"{voice_id}.pt"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = Path(source).expanduser()
+        if not src_path.exists() and (source.startswith("http://") or source.startswith("https://")):
+            dl_out = Path(tmpdir) / "downloaded.wav"
+            subprocess.run(
+                [
+                    "yt-dlp",
+                    "-x",
+                    "--audio-format",
+                    "wav",
+                    "-o",
+                    str(Path(tmpdir) / "downloaded.%(ext)s"),
+                    source,
+                ],
+                check=True,
+            )
+            src_path = dl_out
+
+        if not src_path.exists():
+            print(f"Audio source not found: {source}", file=sys.stderr)
+            sys.exit(1)
+
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-ss",
+                str(start_sec),
+                "-t",
+                str(duration_sec),
+                "-i",
+                str(src_path),
+                "-af",
+                "highpass=f=75,loudnorm=I=-16:TP=-1.5:LRA=11",
+                "-ac",
+                "1",
+                "-ar",
+                "24000",
+                "-c:a",
+                "pcm_s16le",
+                str(dest_wav),
+            ],
+            check=True,
+        )
+
+    dest_pt.unlink(missing_ok=True)
+    _compute_latents_in_venv([voice_id])
+
+    if _daemon_is_ready():
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.settimeout(5.0)
+                s.connect(str(DAEMON_SOCKET))
+                s.sendall((json.dumps({"cmd": "reload_voice", "voice": voice_id}) + "\n").encode("utf-8"))
+                s.recv(64)
+        except Exception:
+            pass
+    print(f"Updated cloned voice '{voice_id}' ({VOICES[voice_id]['name']}) -> {dest_pt}")
+
+
 def main() -> None:
     if len(sys.argv) >= 3 and sys.argv[1] == "set-rate" and sys.argv[2] != "--":
         sys.argv.insert(2, "--")
@@ -738,7 +1095,7 @@ def main() -> None:
         if idx + 1 < len(sys.argv) and sys.argv[idx + 1].startswith("-"):
             sys.argv[idx : idx + 2] = [f"--rate={sys.argv[idx + 1]}"]
 
-    parser = argparse.ArgumentParser(prog="selective-reading", description="Selective Reading TTS controller")
+    parser = argparse.ArgumentParser(prog="selective-reading", description="Selective Reading GPU Zero-Shot Voice Cloning TTS controller")
     sub = parser.add_subparsers(dest="cmd")
 
     read_p = sub.add_parser("read", help="Read selected text or provided text")
@@ -748,21 +1105,28 @@ def main() -> None:
     sub.add_parser("toggle", help="Toggle reading selected text / stop if playing")
     sub.add_parser("pause", help="Toggle pause / resume on current playback")
     sub.add_parser("resume", help="Resume paused playback")
-    sub.add_parser("setup", help="Download and cache Kokoro-82M realistic voice models")
+    sub.add_parser("setup", help="Set up XTTS-v2 GPU voice cloning models and warm daemon")
 
-    prev_p = sub.add_parser("preview", help="Preview a voice")
+    clone_p = sub.add_parser("clone-voice", help="Re-clone a voice from a local audio file or URL")
+    clone_p.add_argument("voice", choices=list(VOICES.keys()), help="Voice ID to update")
+    clone_p.add_argument("source", help="Path to audio file (.wav/.mp3) or video/audio URL")
+    clone_p.add_argument("--start", type=float, default=0.0, help="Start offset in seconds (default: 0)")
+    clone_p.add_argument("--duration", type=float, default=25.0, help="Clip duration in seconds (default: 25)")
+
+    prev_p = sub.add_parser("preview", help="Preview a cloned voice")
     prev_p.add_argument("voice", nargs="?", default=None, help="Voice ID to preview")
 
     voice_p = sub.add_parser("set-voice", help="Set preferred voice")
     voice_p.add_argument("voice", help="Voice ID")
 
-    rate_p = sub.add_parser("set-rate", help="Set speech rate (e.g. +0%, +20%, -15%)")
+    rate_p = sub.add_parser("set-rate", help="Set speech rate (e.g. +0%%, +15%%, -15%%)")
     rate_p.add_argument("rate", help="Rate string")
 
     fmt_p = sub.add_parser("format", help="Preview how text will be formatted for speech")
     fmt_p.add_argument("--text", type=str, default=None, help="Explicit text to format")
 
     sub.add_parser("status", help="Print current JSON state")
+    sub.add_parser("_daemon", help=argparse.SUPPRESS)
 
     worker_p = sub.add_parser("_worker")
     worker_p.add_argument("--voice", required=True)
@@ -772,14 +1136,22 @@ def main() -> None:
     args = parser.parse_args()
     cmd = args.cmd or "toggle"
 
+    if cmd == "_daemon":
+        run_daemon()
+        return
+
     if cmd == "_worker":
         run_worker(args.text, args.voice, args.rate)
         return
 
     if cmd == "setup":
-        ensure_models(show_notifications=False)
+        setup_environment(show_notifications=False)
         write_state(get_running_pid() is not None)
-        print(f"Kokoro-82M models ready in {MODEL_DIR}")
+        print(f"XTTS-v2 celebrity voices ready in {VOICES_DIR} (GPU daemon warm)")
+        return
+
+    if cmd == "clone-voice":
+        clone_voice_from_source(args.voice, args.source, args.start, args.duration)
         return
 
     if cmd == "stop":
@@ -818,7 +1190,10 @@ def main() -> None:
         cfg = load_config()
         voice = args.voice if args.voice in VOICES else cfg["voice"]
         vname = VOICES[voice]["name"]
-        sample = f"Hello! I am {vname}, one of your Selective Reading voices."
+        if voice == "morgan_freeman":
+            sample = "Hello. I am Morgan Freeman, and I will be narrating your selected text."
+        else:
+            sample = "Hello there! I am Stephen Fry, ready to read whatever you highlight on your screen."
         spawn_reader(sample, voice, cfg["rate"], show_notification=False)
         return
 

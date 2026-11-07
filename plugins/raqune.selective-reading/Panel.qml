@@ -16,18 +16,14 @@ Panel {
 
   property bool isPlaying: false
   property bool isPaused: false
-  property string currentVoice: "af_heart"
-  property string currentVoiceName: "Heart"
+  property string currentVoice: "morgan_freeman"
+  property string currentVoiceName: "Morgan Freeman"
   property string currentRate: "+0%"
   property string lastSnippet: ""
 
   readonly property var voices: [
-    { id: "af_heart", name: "Heart", desc: "Warm, Expressive Studio (US F)" },
-    { id: "af_bella", name: "Bella", desc: "Natural, Conversational (US F)" },
-    { id: "am_michael", name: "Michael", desc: "Deep, Podcast Host (US M)" },
-    { id: "am_adam", name: "Adam", desc: "Clear, Engaging Narrator (US M)" },
-    { id: "bf_emma", name: "Emma", desc: "Refined, Studio Narrator (UK F)" },
-    { id: "bm_george", name: "George", desc: "Warm, Classic Audiobook (UK M)" }
+    { id: "morgan_freeman", name: "Morgan Freeman", desc: "Deep, Iconic Narrator (US M)" },
+    { id: "stephen_fry", name: "Stephen Fry", desc: "Warm, Classic Audiobook (UK M)" }
   ]
 
   readonly property var rates: [
@@ -193,7 +189,7 @@ Panel {
         PanelSeparator { foreground: Commons.Color.foreground }
 
         PanelSectionHeader {
-          text: "REALISTIC VOICES"
+          text: "CLONED CELEBRITY VOICES"
           foreground: Commons.Color.foreground
         }
 
@@ -208,7 +204,7 @@ Panel {
               spacing: Style.space(6)
 
               Button {
-                width: parent.width - sampleBtn.implicitWidth - Style.space(6)
+                width: column.width - sampleBtn.width - Style.space(6)
                 text: modelData.name + " — " + modelData.desc
                 bordered: true
                 selected: root.currentVoice === modelData.id
@@ -217,6 +213,7 @@ Panel {
 
               Button {
                 id: sampleBtn
+                width: Style.space(68)
                 text: "Sample"
                 bordered: true
                 onClicked: root.previewVoice(modelData.id)
@@ -260,6 +257,7 @@ Panel {
           wrapMode: Text.WordWrap
           maximumLineCount: 3
           elide: Text.ElideRight
+          clip: true
           color: Qt.darker(Commons.Color.foreground, 1.25)
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
