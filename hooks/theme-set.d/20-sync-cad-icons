@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+import os, re, glob
+
+home = os.path.expanduser("~")
+colors_file = os.path.join(home, ".local/state/omarchy/current/theme/colors.toml")
+plugins_dir = os.path.join(home, ".config/omarchy/plugins")
+
+palette = {
+    "accent": "#8a9a5b",
+    "green": "#78b86e",
+    "yellow": "#e5a93c",
+    "red": "#df4d47",
+    "muted": "#364d42",
+    "background": "#0d1110",
+    "lighter_background": "#141c19"
+}
+
+if os.path.exists(colors_file):
+    with open(colors_file, "r") as f:
+        for line in f:
+            m = re.match(r'^\s*([a-zA-Z0-9_]+)\s*=\s*"(#[0-9a-fA-F]{6,8})"', line)
+            if m:
+                palette[m.group(1)] = m.group(2)
+
+# Fallbacks if a custom theme only defines core keys
+accent = palette.get("accent", "#8a9a5b")
+green = palette.get("green", accent)
+yellow = palette.get("yellow", accent)
+red = palette.get("red", palette.get("urgent", "#df4d47"))
+muted = palette.get("muted", "#364d42")
+bg = palette.get("lighter_background", palette.get("background", "#0d1110"))
+
+for tpl_path in glob.glob(os.path.join(plugins_dir, "**", "*.svg.tpl"), recursive=True):
+    svg_path = tpl_path[:-4]
+    with open(tpl_path, "r") as f:
+        content = f.read()
+    rendered = (
+        content.replace("{{accent}}", accent)
+               .replace("{{green}}", green)
+               .replace("{{yellow}}", yellow)
+               .replace("{{red}}", red)
+               .replace("{{muted}}", muted)
+               .replace("{{bg}}", bg)
+    )
+    with open(svg_path, "w") as f:
+        f.write(rendered)
+
+os.system("omarchy-shell -q shell rescanPlugins >/dev/null 2>&1 || true")
+

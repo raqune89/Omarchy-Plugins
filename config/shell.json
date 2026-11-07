@@ -1,0 +1,120 @@
+{
+  "bar": {
+    "background": "glassy",
+    "layout": {
+      "center": [
+        {
+          "id": "raqune.clock",
+          "format": "ddd d MMM h:mm AP",
+          "formatAlt": "d MMMM 'W'ww yyyy",
+          "verticalFormat": "HH\n—\nmm"
+        }
+      ],
+      "centerBegin": [
+        {
+          "id": "raqune.target-hud"
+        },
+        {
+          "id": "raqune.web-spawner"
+        },
+        {
+          "id": "raqune.payload-vault"
+        },
+        {
+          "id": "raqune.tun-switcher"
+        },
+        {
+          "id": "raqune.port-guard"
+        },
+        {
+          "id": "raqune.loot-pad"
+        },
+        {
+          "id": "raqune.game-boost"
+        },
+        {
+          "id": "raqune.net-hogs"
+        }
+      ],
+      "centerEnd": [
+        {
+          "id": "raqune.elsewhen",
+          "cities": [
+            {
+              "name": "London",
+              "zone": "Europe/London"
+            }
+          ],
+          "offsetMode": "utc"
+        },
+        {
+          "id": "raqune.weather"
+        },
+        {
+          "id": "jesseburlamaque.antigravity-usage",
+          "refreshIntervalSec": 60,
+          "showBadge": true,
+          "badgeMode": "active",
+          "enableQuotaAlerts": true,
+          "quotaAlertThreshold": 20,
+          "terminalCommand": "",
+          "recentSessionsLimit": 5
+        },
+        {
+          "id": "raqune.system-update"
+        },
+        {
+          "id": "raqune.selective-reading"
+        }
+      ],
+      "left": [
+        {
+          "id": "raqune.menu"
+        },
+        {
+          "id": "raqune.workspaces"
+        }
+      ],
+      "right": [
+        {
+          "id": "omarchy.tray"
+        },
+        {
+          "id": "omarchy.keyboard-layout"
+        },
+        {
+          "id": "raqune.bluetooth"
+        },
+        {
+          "id": "raqune.network"
+        },
+        {
+          "id": "raqune.audio"
+        },
+        {
+          "id": "raqune.monitor"
+        },
+        {
+          "id": "raqune.power"
+        }
+      ],
+      "tray": []
+    },
+    "position": "top"
+  },
+  "cloneSourceRestores": [
+    "raqune.menu"
+  ],
+  "disabledPlugins": [
+    "omarchy.elsewhen",
+    "omarchy.indicators",
+    "omarchy.menu",
+    "raqune.indicators"
+  ],
+  "idle": {
+    "lock": 300,
+    "screensaver": 150
+  },
+  "plugins": [],
+  "version": 1
+}

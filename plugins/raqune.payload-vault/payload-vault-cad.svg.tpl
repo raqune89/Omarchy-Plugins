@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!-- 4. Payload Vault: Tactical Ordnance / Terminal Vector -->
+  <polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="none" stroke="{{accent}}" stroke-width="1.1"/>
+  <polygon points="12,5 18,8.5 18,15.5 12,19 6,15.5 6,8.5" fill="none" stroke="{{muted}}" stroke-width="0.8" stroke-dasharray="2,2"/>
+  <path d="M 8.5 10 L 11.5 12.5 L 8.5 15" fill="none" stroke="{{green}}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="12.5" y1="15" x2="16" y2="15" stroke="{{yellow}}" stroke-width="1.3" stroke-linecap="round"/>
+</svg>

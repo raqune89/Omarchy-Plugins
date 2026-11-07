@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!-- Selective Reading: Selection Frame & Acoustic Waves -->
+  <path d="M 4 7 L 4 5 L 7 5" fill="none" stroke="{{accent}}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 4 17 L 4 19 L 7 19" fill="none" stroke="{{accent}}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="6.5" y1="9" x2="12.5" y2="9" stroke="{{accent}}" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="6.5" y1="12" x2="11" y2="12" stroke="{{green}}" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="6.5" y1="15" x2="12.5" y2="15" stroke="{{accent}}" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M 15.5 9.2 C 17 10.5 17 13.5 15.5 14.8" fill="none" stroke="{{green}}" stroke-width="1.3" stroke-linecap="round"/>
+  <path d="M 18 6.8 C 20.5 9.5 20.5 14.5 18 17.2" fill="none" stroke="{{yellow}}" stroke-width="1.3" stroke-linecap="round"/>
+</svg>

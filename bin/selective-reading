@@ -1,0 +1,676 @@
+#!/usr/bin/env -S uv run --quiet --with edge-tts python3
+import argparse
+import asyncio
+from html.parser import HTMLParser
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import edge_tts
+
+HOME = Path.home()
+CONFIG_DIR = HOME / ".config" / "omarchy" / "selective-reading"
+CONFIG_FILE = CONFIG_DIR / "config.json"
+STATE_DIR = HOME / ".local" / "state" / "omarchy" / "selective-reading"
+STATE_FILE = STATE_DIR / "state.json"
+PID_FILE = Path("/tmp/selective-reading.pid")
+
+VOICES = {
+    "en-US-JennyNeural": {
+        "name": "Jenny",
+        "desc": "Natural, Friendly (US Female)",
+    },
+    "en-US-GuyNeural": {
+        "name": "Guy",
+        "desc": "Casual, Expressive (US Male)",
+    },
+    "en-US-AriaNeural": {
+        "name": "Aria",
+        "desc": "Crisp, Versatile (US Female)",
+    },
+    "en-US-ChristopherNeural": {
+        "name": "Christopher",
+        "desc": "Clear, Authoritative (US Male)",
+    },
+    "en-GB-SoniaNeural": {
+        "name": "Sonia",
+        "desc": "Warm, Refined (UK Female)",
+    },
+    "en-GB-RyanNeural": {
+        "name": "Ryan",
+        "desc": "Polite, Articulate (UK Male)",
+    },
+}
+
+DEFAULT_CONFIG = {
+    "voice": "en-US-JennyNeural",
+    "rate": "+0%",
+}
+
+TERMINAL_PUNCT = (".", "!", "?", ":", ";")
+SOFT_TRAILING_WORDS = {
+    "a", "an", "the", "and", "or", "but", "nor", "for", "yet", "so",
+    "in", "on", "at", "to", "from", "by", "with", "of", "as", "into",
+    "like", "through", "after", "over", "between", "out", "against",
+    "during", "without", "before", "under", "around", "among", "that",
+    "which", "who", "whom", "whose", "is", "are", "was", "were", "be",
+}
+
+
+class _StructuredHTMLParser(HTMLParser):
+    HEADING_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
+    BLOCK_TAGS = {
+        "p", "div", "section", "article", "blockquote", "pre",
+        "header", "footer", "main", "aside", "figcaption", "dt", "dd",
+    }
+    IGNORE_TAGS = {"script", "style", "noscript", "svg"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self._ignore_depth = 0
+
+    def _ensure_punctuated(self) -> None:
+        while self.parts and self.parts[-1] in (" ", "\t"):
+            self.parts.pop()
+        if not self.parts:
+            return
+        combined = "".join(self.parts).rstrip()
+        if not combined:
+            return
+        last_line = combined.split("\n")[-1].strip()
+        if last_line and not last_line.endswith(TERMINAL_PUNCT):
+            self.parts.append(".")
+
+    def _append_newline(self, count: int = 1) -> None:
+        current = "".join(self.parts)
+        trailing_nl = len(current) - len(current.rstrip("\n"))
+        needed = max(0, count - trailing_nl)
+        if needed > 0 and current.strip():
+            self.parts.append("\n" * needed)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        t = tag.lower()
+        if t in self.IGNORE_TAGS:
+            self._ignore_depth += 1
+            return
+        if self._ignore_depth > 0:
+            return
+
+        if t in self.HEADING_TAGS or t in self.BLOCK_TAGS or t in ("ul", "ol"):
+            self._append_newline(2)
+        elif t in ("li", "tr", "br", "hr"):
+            self._append_newline(1)
+
+    def handle_endtag(self, tag: str) -> None:
+        t = tag.lower()
+        if t in self.IGNORE_TAGS:
+            self._ignore_depth = max(0, self._ignore_depth - 1)
+            return
+        if self._ignore_depth > 0:
+            return
+
+        if t in self.HEADING_TAGS:
+            self._ensure_punctuated()
+            self._append_newline(2)
+        elif t == "li":
+            self._ensure_punctuated()
+            self._append_newline(1)
+        elif t in ("td", "th"):
+            self._ensure_punctuated()
+            self.parts.append(" ")
+        elif t == "tr":
+            self._ensure_punctuated()
+            self._append_newline(1)
+        elif t in self.BLOCK_TAGS or t in ("ul", "ol"):
+            self._append_newline(2)
+
+    def handle_data(self, data: str) -> None:
+        if self._ignore_depth > 0:
+            return
+        # Collapse internal newlines inside a single HTML text node into spaces
+        cleaned = re.sub(r"\s+", " ", data)
+        if cleaned:
+            self.parts.append(cleaned)
+
+    def get_text(self) -> str:
+        return "".join(self.parts).strip()
+
+
+def html_to_structured_text(raw_html: str) -> str:
+    parser = _StructuredHTMLParser()
+    try:
+        parser.feed(raw_html)
+        parser.close()
+        return parser.get_text()
+    except Exception:
+        return ""
+
+
+def _ensure_sentence_end(line: str) -> str:
+    s = line.strip()
+    if not s:
+        return ""
+    if s.endswith(TERMINAL_PUNCT):
+        return s
+    if s.endswith(","):
+        return s[:-1] + "."
+    return s + "."
+
+
+def _looks_like_heading(line: str, next_line: str | None) -> bool:
+    s = line.strip()
+    if not s or s.endswith(TERMINAL_PUNCT) or s.endswith(","):
+        return False
+    # Short standalone line before a blank line is a heading/title
+    if next_line is None or next_line.strip() == "":
+        return len(s) <= 120
+    # If followed immediately by another line without a blank line:
+    # Check if this line is short and doesn't end with a soft continuation word
+    words = s.split()
+    if 1 <= len(words) <= 8 and len(s) <= 65:
+        last_word = re.sub(r"[^a-zA-Z]", "", words[-1]).lower()
+        nxt = next_line.strip()
+        if last_word not in SOFT_TRAILING_WORDS and nxt and nxt[0].isupper():
+            return True
+    return False
+
+
+def format_text_for_speech(raw: str) -> str:
+    text = raw.replace("\r\n", "\n").replace("\r", "\n")
+    # Strip markdown inline backticks
+    text = text.replace("`", "")
+
+    raw_lines = text.split("\n")
+    normalized_lines: list[tuple[str, str]] = []  # (kind, text) where kind is 'blank', 'heading', 'item', 'text'
+
+    for line in raw_lines:
+        stripped = re.sub(r"[ \t]+", " ", line).strip()
+        if not stripped:
+            normalized_lines.append(("blank", ""))
+            continue
+
+        # Markdown headings: # Title
+        m_head = re.match(r"^#{1,6}\s+(.*)$", stripped)
+        if m_head:
+            normalized_lines.append(("heading", _ensure_sentence_end(m_head.group(1))))
+            continue
+
+        # Bullet list items: • GET, - GET, * GET
+        m_bullet = re.match(r"^[•●◦▪▸▹–—*-]\s*(.+)$", stripped)
+        if m_bullet:
+            normalized_lines.append(("item", _ensure_sentence_end(m_bullet.group(1))))
+            continue
+
+        # Numbered list items: 1. First, 2) Second
+        m_num = re.match(r"^(\d+)[.)]\s+(.+)$", stripped)
+        if m_num:
+            normalized_lines.append(("item", f"{m_num.group(1)}. {_ensure_sentence_end(m_num.group(2))}"))
+            continue
+
+        normalized_lines.append(("text", stripped))
+
+    # Second pass: detect standalone headings/titles and short list-like lines
+    out_blocks: list[str] = []
+    current_para: list[str] = []
+
+    def flush_para() -> None:
+        if not current_para:
+            return
+        joined = " ".join(current_para).strip()
+        if joined:
+            out_blocks.append(_ensure_sentence_end(joined))
+        current_para.clear()
+
+    n = len(normalized_lines)
+    for i, (kind, content) in enumerate(normalized_lines):
+        next_kind, next_content = normalized_lines[i + 1] if i + 1 < n else ("blank", "")
+        prev_kind = normalized_lines[i - 1][0] if i > 0 else "blank"
+
+        if kind == "blank":
+            flush_para()
+            continue
+
+        if kind == "heading":
+            flush_para()
+            out_blocks.append(content)
+            continue
+
+        if kind == "item":
+            flush_para()
+            out_blocks.append(content)
+            continue
+
+        # Plain 'text' line: check if it's an indented/unbulleted short item list (e.g. GET / POST / PUT)
+        words = content.split()
+        is_short_token = len(words) <= 4 and len(content) <= 40 and not content.endswith(TERMINAL_PUNCT)
+        if is_short_token and (prev_kind in ("blank", "item") or next_kind in ("blank", "item")):
+            flush_para()
+            out_blocks.append(_ensure_sentence_end(content))
+            continue
+
+        # Check if this line is a heading/title before a blank line or new paragraph
+        if not current_para and _looks_like_heading(content, None if next_kind == "blank" else next_content):
+            out_blocks.append(_ensure_sentence_end(content))
+            continue
+
+        current_para.append(content)
+
+    flush_para()
+
+    formatted = "\n\n".join(out_blocks).strip()
+    return formatted[:15000]
+
+
+def load_config() -> dict:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if CONFIG_FILE.exists():
+        try:
+            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            voice = data.get("voice", DEFAULT_CONFIG["voice"])
+            if voice not in VOICES:
+                voice = DEFAULT_CONFIG["voice"]
+            rate = data.get("rate", DEFAULT_CONFIG["rate"])
+            if not re.match(r"^[+-]\d+%$", str(rate)):
+                rate = DEFAULT_CONFIG["rate"]
+            return {"voice": voice, "rate": rate}
+        except Exception:
+            pass
+    save_config(DEFAULT_CONFIG)
+    return dict(DEFAULT_CONFIG)
+
+
+def save_config(cfg: dict) -> None:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = CONFIG_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(CONFIG_FILE)
+
+
+def load_state() -> dict:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    if STATE_FILE.exists():
+        try:
+            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    cfg = load_config()
+    voice_id = cfg["voice"]
+    return {
+        "isPlaying": False,
+        "voice": voice_id,
+        "voiceName": VOICES.get(voice_id, {}).get("name", "Jenny"),
+        "rate": cfg["rate"],
+        "textSnippet": "",
+        "updatedAt": int(time.time()),
+    }
+
+
+def write_state(is_playing: bool, snippet: str | None = None) -> dict:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    prev = load_state()
+    cfg = load_config()
+    voice_id = cfg["voice"]
+    state = {
+        "isPlaying": is_playing,
+        "voice": voice_id,
+        "voiceName": VOICES.get(voice_id, {}).get("name", "Jenny"),
+        "rate": cfg["rate"],
+        "textSnippet": snippet if snippet is not None else prev.get("textSnippet", ""),
+        "updatedAt": int(time.time()),
+    }
+    tmp = STATE_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(STATE_FILE)
+    return state
+
+
+def notify(title: str, body: str) -> None:
+    try:
+        subprocess.run(
+            [
+                "notify-send",
+                "-a",
+                "Selective Reading",
+                "-t",
+                "2500",
+                "-h",
+                "string:x-canonical-private-synchronous:selective-reading",
+                title,
+                body,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except Exception:
+        pass
+
+
+def get_running_pid() -> int | None:
+    if not PID_FILE.exists():
+        return None
+    try:
+        pid = int(PID_FILE.read_text(encoding="utf-8").strip())
+        os.kill(pid, 0)
+        return pid
+    except Exception:
+        try:
+            PID_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return None
+
+
+def stop_playback(quiet: bool = False) -> bool:
+    pid = get_running_pid()
+    was_running = False
+    if pid is not None:
+        was_running = True
+        try:
+            os.killpg(os.getpgid(pid), signal.SIGTERM)
+        except Exception:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except Exception:
+                pass
+        for _ in range(10):
+            try:
+                os.kill(pid, 0)
+                time.sleep(0.03)
+            except ProcessLookupError:
+                break
+            except Exception:
+                break
+        try:
+            os.killpg(os.getpgid(pid), signal.SIGKILL)
+        except Exception:
+            pass
+    try:
+        PID_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+    write_state(False)
+    if was_running and not quiet:
+        notify("Selective Reading", "Stopped reading")
+    return was_running
+
+
+def _fingerprint(s: str) -> str:
+    return re.sub(r"\W+", "", s).lower()[:160]
+
+
+def get_selected_text() -> str:
+    # Try primary selection first, then regular clipboard
+    for extra_args in (["--primary"], []):
+        plain = ""
+        try:
+            res = subprocess.run(
+                ["wl-paste", *extra_args, "--no-newline"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                plain = res.stdout.strip()
+        except Exception:
+            pass
+
+        if not plain:
+            continue
+
+        # Check if text/html is also available for richer structural formatting
+        try:
+            types_res = subprocess.run(
+                ["wl-paste", *extra_args, "--list-types"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=1,
+                check=False,
+            )
+            if types_res.returncode == 0 and "text/html" in types_res.stdout.splitlines():
+                html_res = subprocess.run(
+                    ["wl-paste", *extra_args, "--type", "text/html", "--no-newline"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                    timeout=2,
+                    check=False,
+                )
+                if html_res.returncode == 0 and html_res.stdout.strip():
+                    structured = html_to_structured_text(html_res.stdout)
+                    if structured and _fingerprint(structured) == _fingerprint(plain):
+                        return structured
+        except Exception:
+            pass
+
+        return plain
+    return ""
+
+
+async def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
+    communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate)
+    mpv_proc = subprocess.Popen(
+        [
+            "mpv",
+            "--no-video",
+            "--really-quiet",
+            "--no-terminal",
+            "--title=Selective Reading",
+            "--cache=yes",
+            "-",
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio" and chunk.get("data"):
+                if mpv_proc.poll() is not None:
+                    break
+                try:
+                    mpv_proc.stdin.write(chunk["data"])
+                    mpv_proc.stdin.flush()
+                except (BrokenPipeError, OSError):
+                    break
+        if mpv_proc.stdin:
+            try:
+                mpv_proc.stdin.close()
+            except Exception:
+                pass
+        mpv_proc.wait()
+    finally:
+        if mpv_proc.poll() is None:
+            mpv_proc.terminate()
+            try:
+                mpv_proc.wait(timeout=1)
+            except Exception:
+                mpv_proc.kill()
+
+
+def run_worker(text: str, voice: str, rate: str) -> None:
+    my_pid = os.getpid()
+    PID_FILE.write_text(str(my_pid), encoding="utf-8")
+
+    def handle_sig(signum, frame):
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, handle_sig)
+    signal.signal(signal.SIGINT, handle_sig)
+
+    one_line = re.sub(r"\s+", " ", text).strip()
+    snippet = one_line[:140] + ("…" if len(one_line) > 140 else "")
+    write_state(True, snippet)
+
+    try:
+        asyncio.run(stream_tts_to_mpv(text, voice, rate))
+    except (SystemExit, KeyboardInterrupt):
+        pass
+    except Exception as exc:
+        notify("Selective Reading Error", str(exc)[:100])
+    finally:
+        try:
+            current_pid = int(PID_FILE.read_text(encoding="utf-8").strip())
+        except Exception:
+            current_pid = None
+        if current_pid == my_pid:
+            PID_FILE.unlink(missing_ok=True)
+            write_state(False)
+
+
+def spawn_reader(text: str, voice: str, rate: str, show_notification: bool = True) -> None:
+    stop_playback(quiet=True)
+    formatted = format_text_for_speech(text)
+    if not formatted:
+        notify("Selective Reading", "No text selected to read.")
+        write_state(False)
+        return
+
+    voice_name = VOICES.get(voice, {}).get("name", voice)
+    one_line = re.sub(r"\s+", " ", formatted).strip()
+    preview_str = one_line[:75] + ("…" if len(one_line) > 75 else "")
+    if show_notification:
+        notify(f"Reading ({voice_name})", preview_str)
+
+    snippet = one_line[:140] + ("…" if len(one_line) > 140 else "")
+    write_state(True, snippet)
+
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "_worker",
+            "--voice",
+            voice,
+            "--rate",
+            rate,
+            "--text",
+            formatted,
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    PID_FILE.write_text(str(proc.pid), encoding="utf-8")
+
+
+def main() -> None:
+    if len(sys.argv) >= 3 and sys.argv[1] == "set-rate" and sys.argv[2] != "--":
+        sys.argv.insert(2, "--")
+    if "--rate" in sys.argv:
+        idx = sys.argv.index("--rate")
+        if idx + 1 < len(sys.argv) and sys.argv[idx + 1].startswith("-"):
+            sys.argv[idx : idx + 2] = [f"--rate={sys.argv[idx + 1]}"]
+
+    parser = argparse.ArgumentParser(prog="selective-reading", description="Selective Reading TTS controller")
+    sub = parser.add_subparsers(dest="cmd")
+
+    read_p = sub.add_parser("read", help="Read selected text or provided text")
+    read_p.add_argument("--text", type=str, default=None, help="Explicit text to read")
+
+    sub.add_parser("stop", help="Stop current playback")
+    sub.add_parser("toggle", help="Toggle reading selected text / stop if playing")
+
+    prev_p = sub.add_parser("preview", help="Preview a voice")
+    prev_p.add_argument("voice", nargs="?", default=None, help="Voice ID to preview")
+
+    voice_p = sub.add_parser("set-voice", help="Set preferred voice")
+    voice_p.add_argument("voice", help="Voice ID")
+
+    rate_p = sub.add_parser("set-rate", help="Set speech rate (e.g. +0%, +20%, -15%)")
+    rate_p.add_argument("rate", help="Rate string")
+
+    fmt_p = sub.add_parser("format", help="Preview how text will be formatted for speech")
+    fmt_p.add_argument("--text", type=str, default=None, help="Explicit text to format")
+
+    sub.add_parser("status", help="Print current JSON state")
+
+    worker_p = sub.add_parser("_worker")
+    worker_p.add_argument("--voice", required=True)
+    worker_p.add_argument("--rate", required=True)
+    worker_p.add_argument("--text", required=True)
+
+    args = parser.parse_args()
+    cmd = args.cmd or "toggle"
+
+    if cmd == "_worker":
+        run_worker(args.text, args.voice, args.rate)
+        return
+
+    if cmd == "stop":
+        stop_playback(quiet=False)
+        return
+
+    if cmd == "format":
+        txt = args.text if args.text is not None else get_selected_text()
+        print(format_text_for_speech(txt))
+        return
+
+    if cmd == "toggle":
+        if get_running_pid() is not None:
+            stop_playback(quiet=False)
+        else:
+            cfg = load_config()
+            txt = get_selected_text()
+            spawn_reader(txt, cfg["voice"], cfg["rate"], show_notification=True)
+        return
+
+    if cmd == "read":
+        cfg = load_config()
+        txt = args.text if args.text is not None else get_selected_text()
+        spawn_reader(txt, cfg["voice"], cfg["rate"], show_notification=True)
+        return
+
+    if cmd == "preview":
+        cfg = load_config()
+        voice = args.voice if args.voice in VOICES else cfg["voice"]
+        vname = VOICES[voice]["name"]
+        sample = f"Hello! I am {vname}, one of your Selective Reading voices."
+        spawn_reader(sample, voice, cfg["rate"], show_notification=False)
+        return
+
+    if cmd == "set-voice":
+        if args.voice not in VOICES:
+            print(f"Unknown voice: {args.voice}", file=sys.stderr)
+            sys.exit(1)
+        cfg = load_config()
+        cfg["voice"] = args.voice
+        save_config(cfg)
+        st = load_state()
+        write_state(get_running_pid() is not None, st.get("textSnippet", ""))
+        return
+
+    if cmd == "set-rate":
+        rate_val = args.rate.strip()
+        if not rate_val.startswith(("+", "-")):
+            rate_val = "+" + rate_val
+        if not rate_val.endswith("%"):
+            rate_val += "%"
+        cfg = load_config()
+        cfg["rate"] = rate_val
+        save_config(cfg)
+        st = load_state()
+        write_state(get_running_pid() is not None, st.get("textSnippet", ""))
+        return
+
+    if cmd == "status":
+        alive = get_running_pid() is not None
+        st = load_state()
+        if st.get("isPlaying") != alive:
+            st = write_state(alive)
+        print(json.dumps(st, indent=2))
+        return
+
+
+if __name__ == "__main__":
+    main()

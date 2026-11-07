@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "raqune.game-boost",
+  "name": "Game Boost",
+  "version": "1.0.0",
+  "author": "raqune",
+  "description": "GameMode monitor & compositor latency optimizer for Steam",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Game Boost",
+    "description": "GameMode monitor & compositor latency optimizer for Steam",
+    "category": "Gaming",
+    "allowMultiple": false
+  }
+}

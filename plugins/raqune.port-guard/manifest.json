@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "raqune.port-guard",
+  "name": "Port Guard",
+  "version": "1.0.0",
+  "author": "raqune",
+  "description": "Local listening TCP port inspector and socket monitor",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Port Guard",
+    "description": "Local listening TCP port inspector and socket monitor",
+    "category": "Security",
+    "allowMultiple": false
+  }
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <line x1="12" y1="3" x2="12" y2="21" stroke="{{accent}}" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M 8 7 L 16 12 L 12 15 L 12 9 L 16 12 L 8 17" fill="none" stroke="{{green}}" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 18 8 A 6 6 0 0 1 18 16" fill="none" stroke="{{accent}}" stroke-width="0.8" stroke-dasharray="2,2"/>
+  <path d="M 6 8 A 6 6 0 0 0 6 16" fill="none" stroke="{{accent}}" stroke-width="0.8" stroke-dasharray="2,2"/>
+  <line x1="10" y1="3" x2="14" y2="3" stroke="{{accent}}" stroke-width="1"/>
+  <line x1="10" y1="21" x2="14" y2="21" stroke="{{accent}}" stroke-width="1"/>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+  <circle cx="18" cy="18" r="15" fill="{{bg}}" stroke="{{accent}}" stroke-width="1.2"/>
+  <circle cx="18" cy="18" r="12" fill="none" stroke="{{muted}}" stroke-width="0.8" stroke-dasharray="2,2"/>
+  <line x1="3" y1="18" x2="33" y2="18" stroke="{{green}}" stroke-width="1.2"/>
+  <line x1="18" y1="3" x2="18" y2="33" stroke="{{green}}" stroke-width="1.2"/>
+  <circle cx="11" cy="18" r="1" fill="{{yellow}}"/>
+  <circle cx="25" cy="18" r="1" fill="{{yellow}}"/>
+  <circle cx="18" cy="11" r="1" fill="{{yellow}}"/>
+  <circle cx="18" cy="25" r="1" fill="{{yellow}}"/>
+  <circle cx="18" cy="18" r="3.5" fill="none" stroke="{{yellow}}" stroke-width="1.2"/>
+  <circle cx="18" cy="18" r="1" fill="{{red}}"/>
+</svg>

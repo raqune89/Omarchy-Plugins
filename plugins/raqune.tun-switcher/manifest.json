@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "raqune.tun-switcher",
+  "name": "VPN Switcher",
+  "version": "1.0.0",
+  "author": "raqune",
+  "description": "HTB and THM OpenVPN monitor & ping latency meter",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "VPN Switcher",
+    "description": "HTB and THM OpenVPN monitor & ping latency meter",
+    "category": "Security",
+    "allowMultiple": false
+  }
+}

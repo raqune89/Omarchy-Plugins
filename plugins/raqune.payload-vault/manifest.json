@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "raqune.payload-vault",
+  "name": "Payload Vault",
+  "version": "1.0.0",
+  "author": "raqune",
+  "description": "Reverse shell and exploit one-liner drawer with live tun0 substitution",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Payload Vault",
+    "description": "Reverse shell and exploit one-liner drawer with live tun0 substitution",
+    "category": "Security",
+    "allowMultiple": false
+  }
+}
