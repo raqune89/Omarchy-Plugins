@@ -68,10 +68,10 @@ VOICES = {
         "desc": "Smooth, Laid-Back Drawl (US Male)",
         "lang": "en-us",
         "ref_wav": "matthew_mcconaughey_ref.wav",
-        "ref_text": "This is not a traditional memoir. Yes, I tell stories from the past, but I have no interest in nostalgia, sentimentality, or the retirement that most memoirs require. ",
+        "ref_text": "Yeah, I was catching green lights. Never the too cool for school guy who leans against the wall and smokes a cigarette at the party. No, I was the guy who danced at the party. ",
         "f0_up_key": 0,
-        "index_rate": 0.50,
-        "protect": 0.45,
+        "index_rate": 0.25,
+        "protect": 0.40,
         "hf_repo": "RoyalAce/matthew_mcconaughey_rvc_v2_48k_1.05k_epoch",
         "hf_zip": "matthew_mcconaughey.7z",
         "pth_name": "matthew_mcconaughey_e1050_s40950.pth",
@@ -747,7 +747,7 @@ def run_daemon() -> None:
                 f5.vocoder,
                 mel_spec_type="vocos",
                 progress=None,
-                nfe_step=20,
+                nfe_step=32,
                 speed=1.0,
                 device="cuda",
                 streaming=True,
@@ -764,7 +764,11 @@ def run_daemon() -> None:
                     output_device="cpu",
                     output_volume=RVC.MATCH_ORIGINAL,
                 )
-                pcm = converted.detach().cpu().numpy().astype("<f4").tobytes()
+                conv_np = converted.detach().cpu().numpy().astype(np.float32)
+                pk = float(np.max(np.abs(conv_np))) if conv_np.size > 0 else 0.0
+                if pk > 0.90:
+                    conv_np = (conv_np / pk) * 0.90
+                pcm = conv_np.astype("<f4").tobytes()
                 conn.sendall(pcm)
             if idx < len(blocks) - 1:
                 conn.sendall(silence_pcm)
