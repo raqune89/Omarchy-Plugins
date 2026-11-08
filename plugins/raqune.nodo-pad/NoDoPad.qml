@@ -1036,6 +1036,12 @@ Item {
       onActivated: root.applyFormat("underline")
     }
 
+    Shortcut {
+      sequences: ["Ctrl+\\", "Ctrl+Backslash"]
+      enabled: root.activeTab === 0
+      onActivated: root.applyFormat("clear")
+    }
+
     // Main Container
     Rectangle {
       anchors.fill: parent
@@ -1218,9 +1224,9 @@ Item {
                   // Helper Component for Format Buttons
                   Repeater {
                     model: [
-                      { id: "bold", label: "B", tip: "Bold", bold: true, width: 28 },
-                      { id: "italic", label: "I", tip: "Italic", italic: true, width: 28 },
-                      { id: "underline", label: "U", tip: "Underline", underline: true, width: 28 },
+                      { id: "bold", label: "B", tip: "Bold (Ctrl+B)", bold: true, width: 28 },
+                      { id: "italic", label: "I", tip: "Italic (Ctrl+I)", italic: true, width: 28 },
+                      { id: "underline", label: "U", tip: "Underline (Ctrl+U)", underline: true, width: 28 },
                       { id: "h1", label: "H1", tip: "Heading 1", bold: true, width: 34 },
                       { id: "h2", label: "H2", tip: "Heading 2", bold: true, width: 34 },
                       { id: "h3", label: "H3", tip: "Heading 3", bold: true, width: 34 },
@@ -1228,7 +1234,7 @@ Item {
                       { id: "quote", label: "❝ Quote", tip: "Blockquote", width: 68 },
                       { id: "code", label: "</> Code", tip: "Code Snippet", width: 68 },
                       { id: "hr", label: "― Line", tip: "Horizontal Divider", width: 58 },
-                      { id: "clear", label: "⌫ Clear", tip: "Clear Format", width: 62 }
+                      { id: "clear", label: "⌫ Clear", tip: "Clear Format (Ctrl+\\)", width: 62 }
                     ]
 
                     Rectangle {
