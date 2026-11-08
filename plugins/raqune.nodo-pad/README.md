@@ -20,7 +20,7 @@ No menu-bar icon required — opens on-demand as a lightweight, floating utility
   - **Blockquotes**: `❝ Quote` (prominently indented italicized block with continuous vertical left bar)
   - **Code Blocks**: `</> Code` (indented monospace block with lower-shade `#050706` background card)
   - **Horizontal Dividers**: `― Line`
-  - **Clear Format**: `⌫ Clear` (`Ctrl+\`)
+  - **Clear Format**: `⌫ Clear` (`Ctrl+\` or `Ctrl+Del`)
 
 ### Tab 2: Interactive Todo List
 - **Task Entry**: Type task and hit Enter or click "Add".
@@ -35,8 +35,8 @@ No menu-bar icon required — opens on-demand as a lightweight, floating utility
 
 | Shortcut | Description | Action |
 |---|---|---|
-| `SUPER + ALT + T` | Toggle NoDo-pad | Opens / closes the floating NoDo-pad window |
+| `SUPER + ALT + T` | Toggle NoDo-pad | Opens / closes the floating NoDo-pad window (autofocuses editor) |
 | `SUPER + ALT + N` | Switch Tab | Cycles between Notepad and Todo List |
-| `Ctrl+\` | Clear Format | Clears all block & inline formatting on active selection/block |
+| `Ctrl+\` / `Ctrl+Del` | Clear Format | Clears all block & inline formatting on active selection/block |
 | Header Click & Drag | Move Window | Drag anywhere on the header to reposition window |
 | `Escape` | Dismiss Window | Closes NoDo-pad |

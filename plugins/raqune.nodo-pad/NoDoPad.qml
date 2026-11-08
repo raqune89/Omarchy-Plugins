@@ -92,14 +92,37 @@ Item {
     }
   }
 
+  function focusActiveInput() {
+    Qt.callLater(function() {
+      if (root.activeTab === 0 && noteEdit) {
+        noteEdit.forceActiveFocus()
+      } else if (root.activeTab === 1 && taskInput) {
+        taskInput.forceActiveFocus()
+      }
+    })
+  }
+
+  Timer {
+    id: focusTimer
+    interval: 50
+    repeat: false
+    onTriggered: root.focusActiveInput()
+  }
+
   // Host summon/hide API
   function open(payloadJson) {
     closingFromHost = false
     root.opened = true
     window.visible = true
+    root.focusActiveInput()
+    focusTimer.restart()
   }
 
   function close() {
+    if (notesAutosaveTimer.running) {
+      notesAutosaveTimer.stop()
+      root.saveNotes()
+    }
     closingFromHost = true
     root.opened = false
     window.visible = false
@@ -107,6 +130,10 @@ Item {
   }
 
   function requestClose() {
+    if (notesAutosaveTimer.running) {
+      notesAutosaveTimer.stop()
+      root.saveNotes()
+    }
     if (root.shell && typeof root.shell.hide === "function") {
       root.shell.hide("raqune.nodo-pad")
     } else {
@@ -160,6 +187,9 @@ Item {
         root.rebuildDocument(noteEdit.cursorPosition, -1, -1, null)
         root.updateActiveFormats()
         root.updateVisualDecorations()
+        if (root.opened && window.visible) {
+          root.focusActiveInput()
+        }
       })
     }
   }
@@ -1005,7 +1035,10 @@ Item {
     visible: false
 
     onVisibleChanged: {
-      if (!visible && !root.closingFromHost && root.shell && typeof root.shell.hide === "function") {
+      if (visible) {
+        root.focusActiveInput()
+        focusTimer.restart()
+      } else if (!root.closingFromHost && root.shell && typeof root.shell.hide === "function") {
         root.shell.hide("raqune.nodo-pad")
       }
     }
@@ -1037,7 +1070,8 @@ Item {
     }
 
     Shortcut {
-      sequences: ["Ctrl+\\", "Ctrl+Backslash"]
+      sequences: ["Ctrl+\\", "Ctrl+Backslash", "Ctrl+Delete", "Ctrl+Del"]
+      context: Qt.WindowShortcut
       enabled: root.activeTab === 0
       onActivated: root.applyFormat("clear")
     }
@@ -1284,6 +1318,8 @@ Item {
                 id: noteEdit
                 width: noteScrollView.width
                 height: Math.max(noteScrollView.height, contentHeight + 40)
+                focus: true
+                activeFocusOnTab: true
                 textFormat: TextEdit.RichText
                 wrapMode: TextEdit.Wrap
                 selectByMouse: true
@@ -1296,6 +1332,17 @@ Item {
                 rightPadding: 16
                 topPadding: 14
                 bottomPadding: 24
+
+                Keys.priority: Keys.BeforeItem
+                Keys.onPressed: function(event) {
+                  if (event.modifiers & Qt.ControlModifier) {
+                    if (event.key === Qt.Key_Backslash || event.key === Qt.Key_Delete || event.text === "\\" || event.text === "\u001c") {
+                      root.applyFormat("clear")
+                      event.accepted = true
+                      return
+                    }
+                  }
+                }
 
                 onWidthChanged: Qt.callLater(function() { root.updateVisualDecorations() })
                 onContentHeightChanged: Qt.callLater(function() { root.updateVisualDecorations() })
@@ -1364,6 +1411,7 @@ Item {
                 id: taskInput
                 width: parent.width - addBtn.width - 8
                 height: 34
+                activeFocusOnTab: true
                 placeholderText: "Enter a new task... (press Enter to add)"
                 font.family: Style.font.family
                 font.pixelSize: 13

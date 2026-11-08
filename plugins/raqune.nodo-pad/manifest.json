@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "author": "raqune",
   "description": "Floating dual-tab formattable scratchpad & interactive todo list",
+  "keepLoaded": true,
   "kinds": [
     "panel"
   ],
