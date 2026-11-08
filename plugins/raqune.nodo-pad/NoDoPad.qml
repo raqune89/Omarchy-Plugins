@@ -35,6 +35,19 @@ Item {
   // Status message
   property string statusMessage: "Ready"
 
+  // Active Formatting state for toolbar highlight
+  property var activeFormats: ({
+    bold: false,
+    italic: false,
+    underline: false,
+    h1: false,
+    h2: false,
+    h3: false,
+    list: false,
+    quote: false,
+    code: false
+  })
+
   // Todo Data Models
   property var activeTasks: []
   property var completedTasks: []
@@ -111,6 +124,7 @@ Item {
         noteEdit.text = "<h1>Welcome to NoDo-pad</h1><p>Autosaving formattable notes with rich text styling.</p><ul><li>Use <b>Bold</b>, <i>Italic</i>, or <u>Underline</u></li><li>Add <b>H1/H2</b> headers, bullet lists, blockquotes, and code snippets</li></ul><hr><p>All changes autosave continuously.</p>"
       }
       root.notesLoaded = true
+      Qt.callLater(function() { root.updateActiveFormats() })
     }
   }
 
@@ -254,6 +268,74 @@ Item {
     return "ok"
   }
 
+  function getActiveFormatsIpc() {
+    return JSON.stringify(root.activeFormats)
+  }
+
+  function updateActiveFormats() {
+    if (!noteEdit || !root.notesLoaded) return
+    var start = noteEdit.selectionStart
+    var end = noteEdit.selectionEnd
+    var hasSelection = (start !== end && start >= 0 && end > start)
+
+    var p1 = hasSelection ? start : Math.max(0, noteEdit.cursorPosition - 1)
+    var p2 = hasSelection ? end : Math.min(noteEdit.length, noteEdit.cursorPosition + 1)
+    if (p2 <= p1 && noteEdit.length > 0) {
+      p1 = Math.max(0, noteEdit.cursorPosition)
+      p2 = Math.min(noteEdit.length, p1 + 1)
+    }
+
+    var inlineFrag = ""
+    try {
+      inlineFrag = noteEdit.getFormattedText(p1, p2)
+    } catch(e) {}
+
+    // For block detection (h1, h2, h3, list, quote, code), inspect the line bounds
+    var full = noteEdit.getText(0, noteEdit.length)
+    var pos = noteEdit.cursorPosition
+    var lStart = full.lastIndexOf("\u2029", pos - 1)
+    if (lStart === -1) lStart = full.lastIndexOf("\n", pos - 1)
+    lStart = (lStart === -1 ? 0 : lStart + 1)
+
+    var lEnd = full.indexOf("\u2029", pos)
+    if (lEnd === -1) lEnd = full.indexOf("\n", pos)
+    if (lEnd === -1) lEnd = full.length
+
+    var qStart = lStart
+    var qEnd = Math.max(lStart + 1, lEnd)
+    if (qEnd > noteEdit.length) qEnd = noteEdit.length
+    if (qStart > 0 && qStart === qEnd) qStart = qStart - 1
+
+    var lineFrag = ""
+    try {
+      lineFrag = noteEdit.getFormattedText(qStart, qEnd)
+    } catch(e) {}
+
+    var bFrag = inlineFrag + " " + lineFrag
+
+    var isBold = bFrag.indexOf("font-weight:700") !== -1 || bFrag.indexOf("font-weight:bold") !== -1 || bFrag.indexOf("<b>") !== -1
+    var isItalic = bFrag.indexOf("font-style:italic") !== -1 || bFrag.indexOf("<i>") !== -1
+    var isUnder = bFrag.indexOf("text-decoration: underline") !== -1 || bFrag.indexOf("<u>") !== -1
+    var isH1 = bFrag.indexOf("<h1") !== -1 || bFrag.indexOf("font-size:xx-large") !== -1
+    var isH2 = bFrag.indexOf("<h2") !== -1 || bFrag.indexOf("font-size:x-large") !== -1
+    var isH3 = bFrag.indexOf("<h3") !== -1 || bFrag.indexOf("font-size:large") !== -1
+    var isList = bFrag.indexOf("<li") !== -1 || bFrag.indexOf("<ul") !== -1
+    var isQuote = bFrag.indexOf("border-left") !== -1 || bFrag.indexOf("blockquote") !== -1
+    var isCode = bFrag.indexOf("<pre") !== -1 || bFrag.indexOf("font-family:'monospace'") !== -1 || bFrag.indexOf("background-color:#050706") !== -1 || bFrag.indexOf("color:#78b86e") !== -1
+
+    root.activeFormats = {
+      bold: isBold,
+      italic: isItalic,
+      underline: isUnder,
+      h1: isH1,
+      h2: isH2,
+      h3: isH3,
+      list: isList,
+      quote: isQuote,
+      code: isCode
+    }
+  }
+
   // Formatting operations for Notepad
   function applyFormat(type) {
     var start = noteEdit.selectionStart
@@ -319,12 +401,15 @@ Item {
         }
         break
       case "quote":
-        // Indented blockquote with visible left rule and accent/italic styling, no placeholder text
-        formatted = "<p style=\"margin-left: 24px; -qt-block-indent: 1; font-style: italic; color: " + root.accentColor + ";\">" + (content || "&nbsp;") + "</p>"
+        // Indented blockquote with visible continuous left rule and accent/italic styling
+        formatted = "<table border=\"0\" style=\"margin-left: 14px; margin-top: 6px; margin-bottom: 6px;\" cellspacing=\"0\" cellpadding=\"0\">" +
+                    "<tr><td style=\"padding-left: 10px; border-left: 3px solid " + root.accentColor + ";\">" +
+                    "<p style=\"font-style: italic; color: " + root.accentColor + "; margin: 0;\">" + (content || "&nbsp;") + "</p>" +
+                    "</td></tr></table>"
         break
       case "code":
-        // Indented code block with monospace font and subtle dark background, no placeholder text
-        formatted = "<pre style=\"margin-left: 20px; background-color: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 4px;\"><span style=\"font-family:'monospace';\">" + (content || "&nbsp;") + "</span></pre>"
+        // Indented code block with monospace font and darker background card, clearly denoting code snippet
+        formatted = "<pre style=\"margin-left: 20px; margin-top: 6px; margin-bottom: 6px; background-color: #050706; padding: 6px 12px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08);\"><span style=\"font-family:'monospace'; color: #78b86e;\">" + (content || "&nbsp;") + "</span></pre>"
         break
       case "hr":
         formatted = "<hr />"
@@ -349,6 +434,7 @@ Item {
     }
     noteEdit.forceActiveFocus()
     notesAutosaveTimer.restart()
+    Qt.callLater(function() { root.updateActiveFormats() })
   }
 
   // --- Floating Window ---
@@ -593,8 +679,9 @@ Item {
                       width: modelData.width
                       height: 26
                       radius: 3
-                      color: fmtBtnHover.containsMouse ? Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.2) : Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.05)
-                      border.color: fmtBtnHover.containsMouse ? root.accentColor : root.borderCol
+                      readonly property bool isActive: !!(root.activeFormats && root.activeFormats[modelData.id])
+                      color: isActive ? root.accentColor : (fmtBtnHover.containsMouse ? Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.25) : Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.05))
+                      border.color: isActive || fmtBtnHover.containsMouse ? root.accentColor : root.borderCol
                       border.width: 1
 
                       Text {
@@ -602,10 +689,10 @@ Item {
                         text: modelData.label
                         font.family: Style.font.family
                         font.pixelSize: 11
-                        font.bold: modelData.bold || false
+                        font.bold: modelData.bold || isActive || false
                         font.italic: modelData.italic || false
                         font.underline: modelData.underline || false
-                        color: fmtBtnHover.containsMouse ? root.accentColor : root.fgColor
+                        color: isActive ? root.bgColor : (fmtBtnHover.containsMouse ? root.accentColor : root.fgColor)
                       }
 
                       MouseArea {
@@ -647,9 +734,14 @@ Item {
                 topPadding: 14
                 bottomPadding: 24
 
+                onCursorPositionChanged: root.updateActiveFormats()
+                onSelectionStartChanged: root.updateActiveFormats()
+                onSelectionEndChanged: root.updateActiveFormats()
+
                 onTextChanged: {
                   if (root.notesLoaded) {
                     notesAutosaveTimer.restart()
+                    root.updateActiveFormats()
                   }
                 }
               }
