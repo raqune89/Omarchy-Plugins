@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/env bash
+exec /usr/bin/python3 - "$@" << 'EOF'
 import os, re, glob
 
 home = os.path.expanduser("~")
@@ -46,4 +47,4 @@ for tpl_path in glob.glob(os.path.join(plugins_dir, "**", "*.svg.tpl"), recursiv
         f.write(rendered)
 
 os.system("omarchy-shell -q shell rescanPlugins >/dev/null 2>&1 || true")
-
+EOF
