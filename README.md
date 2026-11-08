@@ -16,7 +16,7 @@ cd Omarchy-Plugins
 
 ### What `./install.sh` Does:
 1. Installs all **10 custom menu bar tools** and **13 CAD-styled core bar widgets** into `~/.config/omarchy/plugins/`.
-2. Installs the formatting-aware **`selective-reading`** F5-TTS + RVC v2 GPU celebrity voice CLI to `~/.local/bin/selective-reading` and caches the local **Morgan Freeman**, **Stephen Fry**, and **Matthew McConaughey** voice models.
+2. Installs the formatting-aware **`selective-reading`** F5-TTS + RVC v2 GPU celebrity voice CLI to `~/.local/bin/selective-reading` and caches the local **Morgan Freeman**, **Stephen Fry**, **Matthew McConaughey**, and **Shayne Topp** voice models.
 3. Installs the **`20-sync-cad-icons`** theme hook to `~/.config/omarchy/hooks/theme-set.d/20-sync-cad-icons`.
 4. Restores `~/.config/omarchy/shell.json` so every icon remains in its exact bar section and order (`left`, `centerBegin`, `center`, `centerEnd`, `right`).
 5. Configures the **`SUPER + SHIFT + R`** (start/stop) and **`SUPER + R`** (pause/resume) global shortcuts in `~/.config/hypr/bindings.lua` for **Selective Reading**.
@@ -44,7 +44,7 @@ cd Omarchy-Plugins
 | Position | Plugin ID | Tool Name | Description | Documentation |
 | :---: | :--- | :--- | :--- | :--- |
 | 3 | `jesseburlamaque.antigravity-usage` | **Antigravity Usage** | Antigravity AI quota and active session monitor (with custom CAD icon template) | [README](plugins/jesseburlamaque.antigravity-usage/README.md) |
-| 5 | `raqune.selective-reading` | **Selective Reading** | Formatting-aware F5-TTS + RVC v2 GPU TTS reader (`SUPER + SHIFT + R` start/stop, `SUPER + R` pause/resume) with **Morgan Freeman**, **Stephen Fry**, & **Matthew McConaughey** voices | [README](plugins/raqune.selective-reading/README.md) |
+| 5 | `raqune.selective-reading` | **Selective Reading** | Formatting-aware F5-TTS + RVC v2 GPU TTS reader (`SUPER + SHIFT + R` start/stop, `SUPER + R` pause/resume) with **Morgan Freeman**, **Stephen Fry**, **Matthew McConaughey**, & **Shayne Topp** voices | [README](plugins/raqune.selective-reading/README.md) |
 
 ### Floating On-Demand Tools (No Status-Bar Icon)
 

@@ -41,6 +41,8 @@ VOICES = {
         "lang": "en-us",
         "ref_wav": "morgan_freeman_ref.wav",
         "ref_text": "I'm giving you the finest voice in the land, but that doesn't come cheap, homie. If you want the velvet, you got to bring the silver. ",
+        "base_speed": 0.90,
+        "nfe_step": 32,
         "f0_up_key": 0,
         "index_rate": 0.45,
         "protect": 0.45,
@@ -55,6 +57,8 @@ VOICES = {
         "lang": "en-gb",
         "ref_wav": "stephen_fry_ref.wav",
         "ref_text": "Hello, I'm Stephen Fry, and my narrations of Harry Potter books one to seven are now available to listeners in the US and Canada. ",
+        "base_speed": 0.92,
+        "nfe_step": 32,
         "f0_up_key": 0,
         "index_rate": 0.45,
         "protect": 0.45,
@@ -69,6 +73,8 @@ VOICES = {
         "lang": "en-us",
         "ref_wav": "matthew_mcconaughey_ref.wav",
         "ref_text": "Yeah, I was catching green lights. Never the too cool for school guy who leans against the wall and smokes a cigarette at the party. No, I was the guy who danced at the party. ",
+        "base_speed": 0.78,
+        "nfe_step": 32,
         "f0_up_key": 0,
         "index_rate": 0.25,
         "protect": 0.40,
@@ -77,11 +83,46 @@ VOICES = {
         "pth_name": "matthew_mcconaughey_e1050_s40950.pth",
         "index_name": "added_IVF578_Flat_nprobe_1_matthew_mcconaughey_v2.index",
     },
+    "shayne_topp": {
+        "name": "Shayne Topp",
+        "desc": "Context-Adaptive Energy (US Male)",
+        "lang": "en-us",
+        "ref_wav": "shayne_topp_calm_ref.wav",
+        "ref_text": "And it was interesting because it was at a time where I was really struggling with my acting career. And I wasn't certain if it was going to last much longer, if I was going to be able to keep doing it. ",
+        "ref_wav_calm": "shayne_topp_calm_ref.wav",
+        "ref_text_calm": "And it was interesting because it was at a time where I was really struggling with my acting career. And I wasn't certain if it was going to last much longer, if I was going to be able to keep doing it. ",
+        "ref_wav_hype": "shayne_topp_hype_ref.wav",
+        "ref_text_hype": "Every now and then as I'm scrolling through Reddit, I will find a crazy story. I'll send it their way, be like, hey, we should read this sometime. ",
+        "base_speed": 0.95,
+        "base_speed_calm": 0.92,
+        "base_speed_hype": 1.0,
+        "adaptive": True,
+        "nfe_step": 32,
+    },
+    "shayne_topp_calm": {
+        "name": "Shayne Topp (Calm)",
+        "desc": "Warm, Chill Narrative (US Male)",
+        "lang": "en-us",
+        "ref_wav": "shayne_topp_calm_ref.wav",
+        "ref_text": "And it was interesting because it was at a time where I was really struggling with my acting career. And I wasn't certain if it was going to last much longer, if I was going to be able to keep doing it. ",
+        "base_speed": 0.92,
+        "nfe_step": 32,
+    },
+    "shayne_topp_hype": {
+        "name": "Shayne Topp (Hype)",
+        "desc": "Boisterous, Animated (US Male)",
+        "lang": "en-us",
+        "ref_wav": "shayne_topp_hype_ref.wav",
+        "ref_text": "Every now and then as I'm scrolling through Reddit, I will find a crazy story. I'll send it their way, be like, hey, we should read this sometime. ",
+        "base_speed": 1.0,
+        "nfe_step": 32,
+    },
 }
 
 DEFAULT_CONFIG = {
     "voice": "morgan_freeman",
     "rate": "+0%",
+    "volume": 100,
 }
 
 TERMINAL_PUNCT = (".", "!", "?", ":", ";")
@@ -209,9 +250,154 @@ def _looks_like_heading(line: str, next_line: str | None) -> bool:
     return False
 
 
+_ONES = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+         "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+         "seventeen", "eighteen", "nineteen"]
+_TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+_ORDINALS_SPECIAL = {
+    "one": "first", "two": "second", "three": "third", "five": "fifth",
+    "eight": "eighth", "nine": "ninth", "twelve": "twelfth"
+}
+
+def _int_to_words(n: int) -> str:
+    if n == 0:
+        return "zero"
+    if n < 0:
+        return f"negative {_int_to_words(-n)}"
+    if n < 20:
+        return _ONES[n]
+    if n < 100:
+        rem = n % 10
+        return f"{_TENS[n // 10]}-{_ONES[rem]}" if rem else _TENS[n // 10]
+    if n < 1000:
+        rem = n % 100
+        if rem:
+            return f"{_ONES[n // 100]} hundred {_int_to_words(rem)}".strip()
+        return f"{_ONES[n // 100]} hundred"
+    for scale, name in [(1_000_000_000, "billion"), (1_000_000, "million"), (1_000, "thousand")]:
+        if n >= scale:
+            head = n // scale
+            rem = n % scale
+            res = f"{_int_to_words(head)} {name}"
+            if rem:
+                res += f" {_int_to_words(rem)}"
+            return res.strip()
+    return str(n)
+
+def _year_to_words(n: int) -> str:
+    if 1000 <= n <= 9999:
+        c = n // 100
+        rem = n % 100
+        if rem == 0:
+            return f"{_int_to_words(c)} hundred"
+        if rem < 10:
+            return f"{_int_to_words(c)} oh {_ONES[rem]}"
+        return f"{_int_to_words(c)} {_int_to_words(rem)}"
+    return _int_to_words(n)
+
+def _int_to_ordinal(n: int) -> str:
+    w = _int_to_words(n)
+    words = w.split()
+    last = words[-1]
+    if "-" in last:
+        parts = last.split("-")
+        p_last = parts[-1]
+        parts[-1] = _ORDINALS_SPECIAL.get(p_last, p_last[:-1] + "ieth" if p_last.endswith("y") else p_last + "th")
+        words[-1] = "-".join(parts)
+    else:
+        words[-1] = _ORDINALS_SPECIAL.get(last, last[:-1] + "ieth" if last.endswith("y") else last + "th")
+    return " ".join(words)
+
+
+def normalize_text_for_speech(raw_text: str) -> str:
+    text = raw_text
+
+    # 1. Remove markdown links [anchor](url) -> anchor
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    # 2. Strip code blocks and inline formatting (*, _, ~, `)
+    text = re.sub(r"```[\s\S]*?```", "", text)
+    text = re.sub(r"[*_~`]+", "", text)
+
+    # 3. Currency expansion
+    def repl_dollars(m):
+        try:
+            val = int(m.group(1).replace(",", "").split(".")[0])
+            cents = ""
+            if "." in m.group(1):
+                c_val = int(m.group(1).split(".")[1][:2])
+                if c_val:
+                    cents = f" and {_int_to_words(c_val)} cents"
+            return f"{_int_to_words(val)} dollars{cents}"
+        except Exception:
+            return m.group(1).replace(",", "") + " dollars"
+
+    text = re.sub(r"\$([0-9,]+(?:\.[0-9]+)?)", repl_dollars, text)
+
+    # 4. Percentage
+    def repl_percent(m):
+        try:
+            val = int(m.group(1).replace(",", "").split(".")[0])
+            return f"{_int_to_words(val)} percent"
+        except Exception:
+            return f"{m.group(1)} percent"
+
+    text = re.sub(r"([0-9]+(?:\.[0-9]+)?)\s*%", repl_percent, text)
+
+    # 5. Ordinals (1st, 2nd, 3rd, 4th...)
+    def repl_ordinal(m):
+        try:
+            return _int_to_ordinal(int(m.group(1)))
+        except Exception:
+            return m.group(0)
+
+    text = re.sub(r"\b([0-9]+)(?:st|nd|rd|th)\b", repl_ordinal, text, flags=re.IGNORECASE)
+
+    # 6. Common abbreviations
+    abbrevs = {
+        r"\be\.g\.,?": "for example,",
+        r"\bi\.e\.,?": "that is,",
+        r"\betc\b\.?": "etcetera",
+        r"\bvs\b\.?": "versus",
+        r"\bDr\b\.": "Doctor",
+        r"\bMr\b\.": "Mister",
+        r"\bMrs\b\.": "Missus",
+        r"\bMs\b\.": "Miz",
+        r"\bProf\b\.": "Professor",
+        r"\bapprox\b\.": "approximately",
+    }
+    for pat, rep in abbrevs.items():
+        text = re.sub(pat, rep, text, flags=re.IGNORECASE)
+
+    # 7. Convert numbers to words (e.g. 1993, 4500)
+    def repl_num(m):
+        num_str = m.group(0).replace(",", "")
+        try:
+            val = int(num_str)
+            if 1900 <= val <= 2099:
+                return _year_to_words(val)
+            return _int_to_words(val)
+        except Exception:
+            return m.group(0)
+
+    text = re.sub(r"\b\d{1,3}(?:,\d{3})+\b|\b\d+\b", repl_num, text)
+
+    # 8. Symbols
+    text = text.replace("&", " and ").replace("@", " at ").replace("/", " or ")
+
+    # 9. Normalize dashes and ellipses to natural pauses
+    text = re.sub(r"[—–]", ", ", text)
+    text = re.sub(r"\.{2,}", "... ", text)
+
+    # 10. Strip surrounding quotes so words aren't truncated or lost
+    text = re.sub(r"[\"“”'‘’]", "", text)
+
+    # 11. Normalize spacing
+    text = re.sub(r"[ \t]+", " ", text).strip()
+    return text
+
+
 def format_text_for_speech(raw: str) -> str:
     text = raw.replace("\r\n", "\n").replace("\r", "\n")
-    text = text.replace("`", "")
 
     raw_lines = text.split("\n")
     normalized_lines: list[tuple[str, str]] = []
@@ -224,20 +410,20 @@ def format_text_for_speech(raw: str) -> str:
 
         m_head = re.match(r"^#{1,6}\s+(.*)$", stripped)
         if m_head:
-            normalized_lines.append(("heading", _ensure_sentence_end(m_head.group(1))))
+            normalized_lines.append(("heading", _ensure_sentence_end(normalize_text_for_speech(m_head.group(1)))))
             continue
 
         m_bullet = re.match(r"^[•●◦▪▸▹–—*-]\s*(.+)$", stripped)
         if m_bullet:
-            normalized_lines.append(("item", _ensure_sentence_end(m_bullet.group(1))))
+            normalized_lines.append(("item", _ensure_sentence_end(normalize_text_for_speech(m_bullet.group(1)))))
             continue
 
         m_num = re.match(r"^(\d+)[.)]\s+(.+)$", stripped)
         if m_num:
-            normalized_lines.append(("item", f"{m_num.group(1)}. {_ensure_sentence_end(m_num.group(2))}"))
+            normalized_lines.append(("item", f"{m_num.group(1)}. {_ensure_sentence_end(normalize_text_for_speech(m_num.group(2)))}"))
             continue
 
-        normalized_lines.append(("text", stripped))
+        normalized_lines.append(("text", normalize_text_for_speech(stripped)))
 
     out_blocks: list[str] = []
     current_para: list[str] = []
@@ -302,7 +488,15 @@ def load_config() -> dict:
             if not re.match(r"^[+-]\d+%$", str(rate)):
                 rate = DEFAULT_CONFIG["rate"]
                 changed = True
-            cfg = {"voice": voice, "rate": rate}
+            vol = data.get("volume", DEFAULT_CONFIG["volume"])
+            try:
+                vol = max(0, min(100, int(vol)))
+            except Exception:
+                vol = DEFAULT_CONFIG["volume"]
+                changed = True
+            if data.get("volume") != vol:
+                changed = True
+            cfg = {"voice": voice, "rate": rate, "volume": vol}
             if changed:
                 save_config(cfg)
             return cfg
@@ -336,6 +530,7 @@ def load_state() -> dict:
         "voice": voice_id,
         "voiceName": VOICES.get(voice_id, {}).get("name", "Morgan Freeman"),
         "rate": cfg["rate"],
+        "volume": cfg.get("volume", 100),
         "textSnippet": "",
         "updatedAt": int(time.time()),
     }
@@ -361,6 +556,7 @@ def write_state(
         "voice": voice_id,
         "voiceName": VOICES.get(voice_id, {}).get("name", "Morgan Freeman"),
         "rate": cfg["rate"],
+        "volume": cfg.get("volume", 100),
         "textSnippet": snippet if snippet is not None else prev.get("textSnippet", ""),
         "updatedAt": int(time.time()),
     }
@@ -620,14 +816,53 @@ def ensure_daemon_running(show_notifications: bool = True) -> bool:
     return False
 
 
+def classify_text_energy(text: str) -> str:
+    if "!" in text:
+        return "high"
+    raw_words = [w.strip(".,;:?!\"'()[]{}") for w in text.split()]
+    upper_words = [w for w in raw_words if len(w) >= 2 and w.isupper() and w.isalpha()]
+    if upper_words:
+        return "high"
+    high_energy_keywords = {
+        "omg", "wow", "crazy", "insane", "hilarious", "ridiculous",
+        "yelled", "screamed", "screaming", "shouted", "dude", "bro",
+        "holy", "wild", "unbelievable", "hype", "shut up", "no way"
+    }
+    lower_words = {w.lower() for w in raw_words}
+    if lower_words & high_energy_keywords:
+        return "high"
+    return "low"
+
+
 def _chunk_block_for_f5(block: str) -> list[str]:
-    sentences = [s.strip() for s in re.split(r"(?<=[;:,.!?])\s+", block) if s.strip()]
-    if not sentences:
+    raw_sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", block) if s.strip()]
+    if not raw_sentences:
         return [block] if block.strip() else []
+
+    sentences: list[str] = []
+    for s in raw_sentences:
+        if len(s) > 175:
+            clauses = [c.strip() for c in re.split(r"(?<=[;:])\s+", s) if c and c.strip()]
+            if len(clauses) > 1:
+                cur_clause = ""
+                for c in clauses:
+                    if len(cur_clause) + len(c) + 1 <= 140:
+                        cur_clause = f"{cur_clause} {c}".strip() if cur_clause else c
+                    else:
+                        if cur_clause:
+                            sentences.append(_ensure_sentence_end(cur_clause))
+                        cur_clause = c
+                if cur_clause:
+                    sentences.append(_ensure_sentence_end(cur_clause))
+            else:
+                sentences.append(_ensure_sentence_end(s))
+        else:
+            sentences.append(_ensure_sentence_end(s))
+
     chunks: list[str] = []
     cur = ""
     for s in sentences:
-        limit = 95 if not chunks else 135
+        limit = 140
         candidate = f"{cur} {s}".strip() if cur else s
         if len(candidate) <= limit or len(cur) < 30:
             cur = candidate
@@ -635,10 +870,7 @@ def _chunk_block_for_f5(block: str) -> list[str]:
             chunks.append(cur)
             cur = s
     if cur:
-        if chunks and len(cur) < 20 and len(chunks[-1]) + len(cur) < 160:
-            chunks[-1] = f"{chunks[-1]} {cur}".strip()
-        else:
-            chunks.append(cur)
+        chunks.append(cur)
     return chunks
 
 
@@ -666,16 +898,23 @@ def run_daemon() -> None:
         vocoder_local_path=str(F5_VOCOS_DIR),
         device="cuda",
     )
-    rvc_models: dict[str, RVC] = {}
+    rvc_models: dict[str, RVC | None] = {}
     ref_audios: dict[str, tuple[torch.Tensor, int]] = {}
 
     for vid, vinfo in VOICES.items():
-        vdir = RVC_DIR / vid
-        pth_path = vdir / vinfo["pth_name"]
-        idx_path = vdir / vinfo["index_name"]
-        rvc_models[vid] = RVC(model=str(pth_path), index=str(idx_path))
+        if vinfo.get("pth_name"):
+            vdir = RVC_DIR / vid
+            pth_path = vdir / vinfo["pth_name"]
+            idx_path = vdir / vinfo["index_name"]
+            rvc_models[vid] = RVC(model=str(pth_path), index=str(idx_path))
+        else:
+            rvc_models[vid] = None
         audio_t, sr = torchaudio.load(str(VOICES_DIR / vinfo["ref_wav"]))
         ref_audios[vid] = (audio_t, sr)
+        if vinfo.get("ref_wav_calm") and (VOICES_DIR / vinfo["ref_wav_calm"]).exists():
+            ref_audios[f"{vid}_calm"] = torchaudio.load(str(VOICES_DIR / vinfo["ref_wav_calm"]))
+        if vinfo.get("ref_wav_hype") and (VOICES_DIR / vinfo["ref_wav_hype"]).exists():
+            ref_audios[f"{vid}_hype"] = torchaudio.load(str(VOICES_DIR / vinfo["ref_wav_hype"]))
 
     # Warm up F5-TTS + RMVPE + Hubert + RVC on CUDA so first user keypress starts quickly
     try:
@@ -697,15 +936,16 @@ def run_daemon() -> None:
         ):
             wav_t = torch.from_numpy(np.asarray(wav_chunk, dtype=np.float32))
             wav_t.frequency = out_sr
-            _ = rvc_models[first_vid](
-                wav_t,
-                f0_up_key=first_vinfo["f0_up_key"],
-                f0_method="rmvpe",
-                index_rate=first_vinfo["index_rate"],
-                protect=first_vinfo["protect"],
-                output_device="cpu",
-                output_volume=RVC.MATCH_ORIGINAL,
-            )
+            if rvc_models[first_vid] is not None:
+                _ = rvc_models[first_vid](
+                    wav_t,
+                    f0_up_key=first_vinfo.get("f0_up_key", 0),
+                    f0_method="rmvpe",
+                    index_rate=first_vinfo.get("index_rate", 0.3),
+                    protect=first_vinfo.get("protect", 0.4),
+                    output_device="cpu",
+                    output_volume=RVC.MATCH_ORIGINAL,
+                )
     except Exception:
         pass
 
@@ -734,42 +974,68 @@ def run_daemon() -> None:
         ref_text = vinfo["ref_text"]
         blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
         silence_pcm = np.zeros(int(44100 * 0.40), dtype="<f4").tobytes()
+        nfe_step = vinfo.get("nfe_step", 32)
+        base_speed = vinfo.get("base_speed", 1.0)
 
         for idx, block in enumerate(blocks):
             batches = _chunk_block_for_f5(block)
             if not batches:
                 continue
-            for wav_chunk, out_sr in infer_batch_process(
-                ref_audio,
-                ref_text,
-                batches,
-                f5.ema_model,
-                f5.vocoder,
-                mel_spec_type="vocos",
-                progress=None,
-                nfe_step=32,
-                speed=1.0,
-                device="cuda",
-                streaming=True,
-                chunk_size=240000,
-            ):
-                wav_t = torch.from_numpy(np.asarray(wav_chunk, dtype=np.float32))
-                wav_t.frequency = out_sr
-                converted = rvc(
-                    wav_t,
-                    f0_up_key=vinfo["f0_up_key"],
-                    f0_method="rmvpe",
-                    index_rate=vinfo["index_rate"],
-                    protect=vinfo["protect"],
-                    output_device="cpu",
-                    output_volume=RVC.MATCH_ORIGINAL,
-                )
-                conv_np = converted.detach().cpu().numpy().astype(np.float32)
-                pk = float(np.max(np.abs(conv_np))) if conv_np.size > 0 else 0.0
-                if pk > 0.90:
-                    conv_np = (conv_np / pk) * 0.90
-                pcm = conv_np.astype("<f4").tobytes()
-                conn.sendall(pcm)
+            for batch in batches:
+                cur_ref = ref_audio
+                cur_ref_text = ref_text
+                cur_speed = base_speed
+
+                if vinfo.get("adaptive"):
+                    energy = classify_text_energy(batch)
+                    if energy == "high" and f"{voice}_hype" in ref_audios:
+                        cur_ref = ref_audios[f"{voice}_hype"]
+                        cur_ref_text = vinfo.get("ref_text_hype", ref_text)
+                        cur_speed = vinfo.get("base_speed_hype", 1.0)
+                    elif f"{voice}_calm" in ref_audios:
+                        cur_ref = ref_audios[f"{voice}_calm"]
+                        cur_ref_text = vinfo.get("ref_text_calm", ref_text)
+                        cur_speed = vinfo.get("base_speed_calm", 0.92)
+
+                for wav_chunk, out_sr in infer_batch_process(
+                    cur_ref,
+                    cur_ref_text,
+                    [batch],
+                    f5.ema_model,
+                    f5.vocoder,
+                    mel_spec_type="vocos",
+                    progress=None,
+                    nfe_step=nfe_step,
+                    speed=cur_speed,
+                    device="cuda",
+                    streaming=True,
+                    chunk_size=240000,
+                ):
+                    if rvc is not None:
+                        wav_t = torch.from_numpy(np.asarray(wav_chunk, dtype=np.float32))
+                        wav_t.frequency = out_sr
+                        converted = rvc(
+                            wav_t,
+                            f0_up_key=vinfo.get("f0_up_key", 0),
+                            f0_method="rmvpe",
+                            index_rate=vinfo.get("index_rate", 0.3),
+                            protect=vinfo.get("protect", 0.4),
+                            output_device="cpu",
+                            output_volume=RVC.MATCH_ORIGINAL,
+                        )
+                        conv_np = converted.detach().cpu().numpy().astype(np.float32)
+                    else:
+                        # Pure F5-TTS zero-shot voice cloning
+                        # Resample out_sr (24kHz) to 44.1kHz for MPV raw audio demuxer
+                        wav_t = torch.from_numpy(np.asarray(wav_chunk, dtype=np.float32)).unsqueeze(0)
+                        resampled = torchaudio.functional.resample(wav_t, out_sr, 44100).squeeze(0)
+                        conv_np = resampled.cpu().numpy().astype(np.float32)
+
+                    pk = float(np.max(np.abs(conv_np))) if conv_np.size > 0 else 0.0
+                    if pk > 0.90:
+                        conv_np = (conv_np / pk) * 0.90
+                    pcm = conv_np.astype("<f4").tobytes()
+                    conn.sendall(pcm)
             if idx < len(blocks) - 1:
                 conn.sendall(silence_pcm)
 
@@ -805,7 +1071,7 @@ def run_daemon() -> None:
                 continue
 
 
-def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
+def stream_tts_to_mpv(text: str, voice: str, rate: str, volume: int = 100) -> None:
     try:
         MPV_IPC_SOCKET.unlink(missing_ok=True)
     except Exception:
@@ -828,6 +1094,7 @@ def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
             "--demuxer-rawaudio-channels=1",
             "--demuxer-rawaudio-format=floatle",
             f"--speed={speed}",
+            f"--volume={volume}",
             "--af=scaletempo2",
             "--cache=yes",
             "--demuxer-max-bytes=100MiB",
@@ -872,7 +1139,7 @@ def stream_tts_to_mpv(text: str, voice: str, rate: str) -> None:
             pass
 
 
-def run_worker(text: str, voice: str, rate: str) -> None:
+def run_worker(text: str, voice: str, rate: str, volume: int = 100) -> None:
     my_pid = os.getpid()
     PID_FILE.write_text(str(my_pid), encoding="utf-8")
 
@@ -887,7 +1154,7 @@ def run_worker(text: str, voice: str, rate: str) -> None:
     write_state(True, snippet, is_paused=False)
 
     try:
-        stream_tts_to_mpv(text, voice, rate)
+        stream_tts_to_mpv(text, voice, rate, volume)
     except (SystemExit, KeyboardInterrupt):
         pass
     except Exception as exc:
@@ -903,7 +1170,7 @@ def run_worker(text: str, voice: str, rate: str) -> None:
             write_state(False, is_paused=False)
 
 
-def spawn_reader(text: str, voice: str, rate: str, show_notification: bool = True) -> None:
+def spawn_reader(text: str, voice: str, rate: str, volume: int = 100, show_notification: bool = True) -> None:
     stop_playback(quiet=True)
     formatted = format_text_for_speech(text)
     if not formatted:
@@ -929,6 +1196,8 @@ def spawn_reader(text: str, voice: str, rate: str, show_notification: bool = Tru
             voice,
             "--rate",
             rate,
+            "--volume",
+            str(volume),
             "--text",
             formatted,
         ],
@@ -1116,7 +1385,7 @@ def setup_environment(show_notifications: bool = False) -> None:
     missing_models = (
         not F5_CKPT_FILE.exists()
         or not (F5_VOCOS_DIR / "pytorch_model.bin").exists()
-        or any(not (RVC_DIR / vid / vinfo["pth_name"]).exists() for vid, vinfo in VOICES.items())
+        or any(not (RVC_DIR / vid / vinfo["pth_name"]).exists() for vid, vinfo in VOICES.items() if vinfo.get("pth_name"))
     )
     if missing_models:
         if show_notifications:
@@ -1197,6 +1466,9 @@ def main() -> None:
     rate_p = sub.add_parser("set-rate", help="Set speech rate (e.g. +0%%, +15%%, -15%%)")
     rate_p.add_argument("rate", help="Rate string")
 
+    vol_p = sub.add_parser("set-volume", help="Set playback volume (0-100 or relative +/-N)")
+    vol_p.add_argument("volume", help="Volume (0-100 or +N/-N)")
+
     fmt_p = sub.add_parser("format", help="Preview how text will be formatted for speech")
     fmt_p.add_argument("--text", type=str, default=None, help="Explicit text to format")
 
@@ -1206,6 +1478,7 @@ def main() -> None:
     worker_p = sub.add_parser("_worker")
     worker_p.add_argument("--voice", required=True)
     worker_p.add_argument("--rate", required=True)
+    worker_p.add_argument("--volume", type=int, default=100)
     worker_p.add_argument("--text", required=True)
 
     args = parser.parse_args()
@@ -1216,7 +1489,7 @@ def main() -> None:
         return
 
     if cmd == "_worker":
-        run_worker(args.text, args.voice, args.rate)
+        run_worker(args.text, args.voice, args.rate, args.volume)
         return
 
     if cmd == "setup":
@@ -1248,13 +1521,13 @@ def main() -> None:
         else:
             cfg = load_config()
             txt = get_selected_text()
-            spawn_reader(txt, cfg["voice"], cfg["rate"], show_notification=True)
+            spawn_reader(txt, cfg["voice"], cfg["rate"], cfg.get("volume", 100), show_notification=True)
         return
 
     if cmd == "read":
         cfg = load_config()
         txt = args.text if args.text is not None else get_selected_text()
-        spawn_reader(txt, cfg["voice"], cfg["rate"], show_notification=True)
+        spawn_reader(txt, cfg["voice"], cfg["rate"], cfg.get("volume", 100), show_notification=True)
         return
 
     if cmd == "preview":
@@ -1264,9 +1537,15 @@ def main() -> None:
             sample = "Hello. I am Morgan Freeman, and I will be narrating your selected text."
         elif voice == "matthew_mcconaughey":
             sample = "Alright, alright, alright. I am Matthew McConaughey, and I will be reading whatever you highlight on your screen."
+        elif voice == "shayne_topp":
+            sample = "Welcome back to Reddit stories. Today we have a thoughtful confession, and then, OH MY GOSH, the most insane update you have ever heard!"
+        elif voice == "shayne_topp_calm":
+            sample = "Hello. I am Shayne Topp, reading your selected text with a calm and measured narrative tone."
+        elif voice == "shayne_topp_hype":
+            sample = "LET'S GO! I am Shayne Topp, ready to bring maximum energy to whatever you highlight on screen!"
         else:
             sample = "Hello there! I am Stephen Fry, ready to read whatever you highlight on your screen."
-        spawn_reader(sample, voice, cfg["rate"], show_notification=False)
+        spawn_reader(sample, voice, cfg["rate"], cfg.get("volume", 100), show_notification=False)
         return
 
     if cmd == "set-voice":
@@ -1291,6 +1570,30 @@ def main() -> None:
         save_config(cfg)
         if get_running_pid() is not None:
             _mpv_ipc_command(["set_property", "speed", rate_to_speed(rate_val)])
+        st = load_state()
+        write_state(get_running_pid() is not None, st.get("textSnippet", ""))
+        return
+
+    if cmd == "set-volume":
+        cfg = load_config()
+        cur_vol = int(cfg.get("volume", 100))
+        val_str = str(args.volume).strip()
+        if val_str.startswith(("+", "-")):
+            try:
+                delta = int(val_str)
+                new_vol = max(0, min(100, cur_vol + delta))
+            except ValueError:
+                new_vol = cur_vol
+        else:
+            try:
+                new_vol = max(0, min(100, int(val_str)))
+            except ValueError:
+                new_vol = 100
+
+        cfg["volume"] = new_vol
+        save_config(cfg)
+        if get_running_pid() is not None:
+            _mpv_ipc_command(["set_property", "volume", new_vol])
         st = load_state()
         write_state(get_running_pid() is not None, st.get("textSnippet", ""))
         return

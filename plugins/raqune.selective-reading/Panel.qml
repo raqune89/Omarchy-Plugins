@@ -19,12 +19,16 @@ Panel {
   property string currentVoice: "morgan_freeman"
   property string currentVoiceName: "Morgan Freeman"
   property string currentRate: "+0%"
+  property int currentVolume: 100
   property string lastSnippet: ""
 
   readonly property var voices: [
     { id: "morgan_freeman", name: "Morgan Freeman", desc: "Deep, Iconic Narrator (US M)" },
     { id: "stephen_fry", name: "Stephen Fry", desc: "Warm, Classic Audiobook (UK M)" },
-    { id: "matthew_mcconaughey", name: "Matthew McConaughey", desc: "Smooth, Laid-Back Drawl (US M)" }
+    { id: "matthew_mcconaughey", name: "Matthew McConaughey", desc: "Smooth, Laid-Back Drawl (US M)" },
+    { id: "shayne_topp", name: "Shayne Topp", desc: "Adaptive Energy (US M)" },
+    { id: "shayne_topp_calm", name: "Shayne Topp (Calm)", desc: "Warm, Chill Narrative (US M)" },
+    { id: "shayne_topp_hype", name: "Shayne Topp (Hype)", desc: "Boisterous, Animated (US M)" }
   ]
 
   readonly property var rates: [
@@ -32,6 +36,13 @@ Panel {
     { id: "+0%", label: "1.0x" },
     { id: "+15%", label: "1.15x" },
     { id: "+30%", label: "1.3x" }
+  ]
+
+  readonly property var volumes: [
+    { label: "Mute", value: 0 },
+    { label: "50%", value: 50 },
+    { label: "75%", value: 75 },
+    { label: "100%", value: 100 }
   ]
 
   function neutralizeMarkup(val) {
@@ -52,6 +63,7 @@ Panel {
         if (data.voice) root.currentVoice = String(data.voice)
         if (data.voiceName) root.currentVoiceName = String(data.voiceName)
         if (data.rate) root.currentRate = String(data.rate)
+        if (data.volume !== undefined) root.currentVolume = Math.round(Number(data.volume))
         if (data.textSnippet !== undefined) root.lastSnippet = String(data.textSnippet)
       } catch (e) {}
     }
@@ -71,6 +83,12 @@ Panel {
   function selectRate(rateStr) {
     root.currentRate = rateStr
     Util.execArgv([root.cliPath, "set-rate", rateStr])
+  }
+
+  function setVolume(vol) {
+    var v = Math.max(0, Math.min(100, Math.round(vol)))
+    root.currentVolume = v
+    Util.execArgv([root.cliPath, "set-volume", String(v)])
   }
 
   function triggerRead() {
@@ -242,6 +260,67 @@ Panel {
               bordered: true
               selected: root.currentRate === modelData.id
               onClicked: root.selectRate(modelData.id)
+            }
+          }
+        }
+
+        PanelSeparator { foreground: Commons.Color.foreground }
+
+        Row {
+          width: parent.width
+          spacing: Style.space(8)
+
+          Text {
+            width: parent.width - Style.space(56) - Style.space(8)
+            textFormat: Text.PlainText
+            text: "VOLUME"
+            color: Commons.Color.foreground
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            elide: Text.ElideRight
+            clip: true
+          }
+
+          Text {
+            id: volValueText
+            width: Style.space(56)
+            textFormat: Text.PlainText
+            text: (volSlider.dragging ? Math.round(volSlider.liveValue) : root.currentVolume) + "%"
+            color: Qt.darker(Commons.Color.foreground, 1.25)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideRight
+            clip: true
+          }
+        }
+
+        PanelSlider {
+          id: volSlider
+          bar: root.bar
+          width: parent.width
+          minimum: 0
+          maximum: 100
+          step: 5
+          integer: true
+          value: root.currentVolume
+          onMoved: function(v) { root.setVolume(v) }
+        }
+
+        Row {
+          width: parent.width
+          spacing: Style.space(6)
+
+          Repeater {
+            model: root.volumes
+            delegate: Button {
+              width: Math.floor((column.width - Style.space(18)) / 4)
+              text: modelData.label
+              bordered: true
+              selected: root.currentVolume === modelData.value
+              onClicked: root.setVolume(modelData.value)
             }
           }
         }
