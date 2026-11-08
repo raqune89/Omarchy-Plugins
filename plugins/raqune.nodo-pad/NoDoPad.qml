@@ -217,6 +217,35 @@ Item {
     root.statusMessage = "Notes autosaved at " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   }
 
+  function clearNoteText() {
+    if (!noteEdit) return
+    var start = noteEdit.selectionStart
+    var end = noteEdit.selectionEnd
+    var hasSelection = (start !== end && start >= 0 && end > start)
+
+    if (hasSelection) {
+      noteEdit.remove(start, end)
+      noteEdit.forceActiveFocus()
+      notesAutosaveTimer.restart()
+      root.statusMessage = "Selected text deleted"
+    } else {
+      root.internalFormattingUpdate = true
+      noteEdit.text = "<p style=\"margin-top:2px; margin-bottom:2px; margin-left:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>"
+      root.internalFormattingUpdate = false
+      root.lineBlockMap = { 0: "normal" }
+      root.pendingInline = { bold: false, italic: false, underline: false }
+      root.hasPendingInline = false
+      root.visualDecorations = []
+      noteEdit.cursorPosition = 0
+      root.lastDocLength = noteEdit.length
+      root.lastParagraphCount = 1
+      root.updateActiveFormats()
+      noteEdit.forceActiveFocus()
+      notesAutosaveTimer.restart()
+      root.statusMessage = "Notes cleared"
+    }
+  }
+
   function saveTodos() {
     var payload = {
       active: root.activeTasks,
@@ -332,6 +361,15 @@ Item {
   function applyFormatIpc(type) {
     root.applyFormat(type)
     return "ok"
+  }
+
+  function clearNotesIpc() {
+    root.clearNoteText()
+    return "ok"
+  }
+
+  function getStatusMessageIpc() {
+    return root.statusMessage
   }
 
   function getActiveFormatsIpc() {
@@ -986,31 +1024,7 @@ Item {
     }
 
     if (type === "clear") {
-      var cStartLine = hasSelection ? root.getParagraphIndexAt(start, paras) : curLineIdx
-      var cEndLine = hasSelection ? root.getParagraphIndexAt(Math.max(start, end - 1), paras) : curLineIdx
-      var cOldMap = {}
-      var cNextMap = {}
-      for (var c = 0; c < paras.length; c++) {
-        var ex = root.getParagraphBlockType(c, paras[c].start, paras[c].end)
-        cOldMap[c] = ex
-        cNextMap[c] = (c >= cStartLine && c <= cEndLine) ? "normal" : ex
-      }
-      root.lineBlockMap = cNextMap
-      root.pendingInline = { bold: false, italic: false, underline: false }
-      root.hasPendingInline = true
-      root.pendingInlineCursorPos = pos
-
-      var clearFrom = hasSelection ? start : curPara.start
-      var clearTo = hasSelection ? end : curPara.end
-      root.rebuildDocument(pos, hasSelection ? start : -1, hasSelection ? end : -1, {
-        type: "clear",
-        rangeStart: clearFrom,
-        rangeEnd: clearTo,
-        oldBlockMap: cOldMap
-      })
-      noteEdit.forceActiveFocus()
-      notesAutosaveTimer.restart()
-      root.updateActiveFormats()
+      root.clearNoteText()
       return
     }
 
@@ -1073,7 +1087,7 @@ Item {
       sequences: ["Ctrl+\\", "Ctrl+Backslash", "Ctrl+Delete", "Ctrl+Del"]
       context: Qt.WindowShortcut
       enabled: root.activeTab === 0
-      onActivated: root.applyFormat("clear")
+      onActivated: root.clearNoteText()
     }
 
     // Main Container
@@ -1268,7 +1282,7 @@ Item {
                       { id: "quote", label: "❝ Quote", tip: "Blockquote", width: 68 },
                       { id: "code", label: "</> Code", tip: "Code Snippet", width: 68 },
                       { id: "hr", label: "― Line", tip: "Horizontal Divider", width: 58 },
-                      { id: "clear", label: "⌫ Clear", tip: "Clear Format (Ctrl+\\)", width: 62 }
+                      { id: "clear", label: "⌫ Clear", tip: "Clear Text (Ctrl+Del / Ctrl+\\)", width: 62 }
                     ]
 
                     Rectangle {
@@ -1337,7 +1351,7 @@ Item {
                 Keys.onPressed: function(event) {
                   if (event.modifiers & Qt.ControlModifier) {
                     if (event.key === Qt.Key_Backslash || event.key === Qt.Key_Delete || event.text === "\\" || event.text === "\u001c") {
-                      root.applyFormat("clear")
+                      root.clearNoteText()
                       event.accepted = true
                       return
                     }
