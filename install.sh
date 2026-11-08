@@ -62,7 +62,7 @@ o.window({ class = "^org.quickshell$", title = "^NoDo-pad$" }, { float = true, s
 
 -- NoDo-pad: Toggle (SUPER + ALT + T), Switch tab (SUPER + ALT + N)
 o.bind("SUPER + ALT + T", "Toggle NoDo-pad", "omarchy-shell shell toggle raqune.nodo-pad")
-o.bind("SUPER + ALT + N", "Switch NoDo-pad tab", "omarchy-shell shell call raqune.nodo-pad switchTab")
+o.bind("SUPER + ALT + N", "Switch NoDo-pad tab", "omarchy-shell shell call raqune.nodo-pad switchTab toggle")
 EOF
     echo "  [+] Added NoDo-pad keybindings (SUPER + ALT + T, SUPER + ALT + N) to ${BINDINGS_LUA}"
   else

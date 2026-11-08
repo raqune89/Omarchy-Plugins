@@ -122,9 +122,16 @@ Item {
     }
   }
 
-  function switchTab() {
+  function switchTab(arg) {
     root.activeTab = (root.activeTab === 0 ? 1 : 0)
     root.statusMessage = "Switched to " + (root.activeTab === 0 ? "Notepad" : "Todo List")
+    Qt.callLater(function() {
+      if (root.activeTab === 0 && noteEdit) {
+        noteEdit.forceActiveFocus()
+      } else if (root.activeTab === 1 && taskInput) {
+        taskInput.forceActiveFocus()
+      }
+    })
     return "tab:" + root.activeTab
   }
 
@@ -1005,8 +1012,8 @@ Item {
 
     // Keyboard Shortcuts inside window
     Shortcut {
-      sequence: "Super+Alt+N"
-      onActivated: root.switchTab()
+      sequence: "Meta+Alt+N"
+      onActivated: root.switchTab("shortcut")
     }
 
     Shortcut {
