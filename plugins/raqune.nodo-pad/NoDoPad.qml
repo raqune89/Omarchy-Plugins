@@ -48,6 +48,20 @@ Item {
     code: false
   })
 
+  // Per-line block type state & pending inline typing state
+  property var lineBlockMap: ({})
+  property var pendingInline: ({
+    bold: false,
+    italic: false,
+    underline: false
+  })
+  property bool hasPendingInline: false
+  property int pendingInlineCursorPos: -1
+  property bool internalFormattingUpdate: false
+  property int lastDocLength: 0
+  property int lastParagraphCount: 1
+  property var visualDecorations: []
+
   // Todo Data Models
   property var activeTasks: []
   property var completedTasks: []
@@ -60,7 +74,11 @@ Item {
   }
 
   function initStorage() {
-    Util.execArgv(["sh", "-c", "mkdir -p '" + root.stateDir + "'; [ -f '" + root.notesPath + "' ] || printf '<h1>Welcome to NoDo-pad</h1><p>Autosaving formattable notes with rich text styling.</p><ul><li>Use <b>Bold</b>, <i>Italic</i>, or <u>Underline</u></li><li>Add <b>H1/H2</b> headers, bullet lists, blockquotes, and code snippets</li></ul><hr><p>All changes autosave continuously.</p>' > '" + root.notesPath + "'; [ -f '" + root.todosPath + "' ] || printf '{\\n  \"active\": [],\\n  \"completed\": []\\n}\\n' > '" + root.todosPath + "'"])
+    var defaultHtml = "<h1 style=\"margin-top:6px; margin-bottom:4px; margin-left:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\"font-family:'JetBrainsMono Nerd Font'; font-size:22px; font-weight:700; color:" + root.fgColor + ";\">Welcome to NoDo-pad</span></h1>" +
+                      "<p style=\"margin-top:2px; margin-bottom:2px; margin-left:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\"font-family:'JetBrainsMono Nerd Font'; font-size:13px; font-weight:400; color:" + root.fgColor + ";\">Autosaving formattable notes with rich text styling.</span></p>" +
+                      "<ul style=\"margin-top:2px; margin-bottom:2px; margin-left:24px; -qt-list-indent:1;\"><li style=\"margin-top:2px; margin-bottom:2px; margin-left:0px; -qt-block-indent:0;\"><span style=\"font-family:'JetBrainsMono Nerd Font'; font-size:13px; font-weight:400; color:" + root.fgColor + ";\">Use </span><span style=\"font-family:'JetBrainsMono Nerd Font'; font-size:13px; font-weight:700; color:" + root.fgColor + ";\">Bold</span><span style=\"font-family:'JetBrainsMono Nerd Font'; font-size:13px; font-weight:400; color:" + root.fgColor + ";\">, </span><span style=\"font-family:'JetBrainsMono Nerd Font'; font-size:13px; font-weight:400; font-style:italic; color:" + root.fgColor + ";\">Italic</span><span style=\"font-family:'JetBrainsMono Nerd Font'; font-size:13px; font-weight:400; color:" + root.fgColor + ";\">, or </span><span style=\"font-family:'JetBrainsMono Nerd Font'; font-size:13px; font-weight:400; text-decoration: underline; color:" + root.fgColor + ";\">Underline</span></li></ul>" +
+                      "<p style=\"margin-top:2px; margin-bottom:2px; margin-left:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\"font-family:'JetBrainsMono Nerd Font'; font-size:13px; font-weight:400; color:" + root.fgColor + ";\">All changes autosave continuously.</span></p>"
+    Util.execArgv(["sh", "-c", "mkdir -p '" + root.stateDir + "'; [ -f '" + root.notesPath + "' ] || printf '%s' '" + defaultHtml.replace(/'/g, "'\\''") + "' > '" + root.notesPath + "'; [ -f '" + root.todosPath + "' ] || printf '{\\n  \"active\": [],\\n  \"completed\": []\\n}\\n' > '" + root.todosPath + "'"])
     reloadStorageTimer.restart()
   }
 
@@ -118,13 +136,24 @@ Item {
     printErrors: false
     onLoaded: {
       var raw = text()
+      root.internalFormattingUpdate = true
       if (raw && raw.trim().length > 0) {
         noteEdit.text = raw
       } else {
-        noteEdit.text = "<h1>Welcome to NoDo-pad</h1><p>Autosaving formattable notes with rich text styling.</p><ul><li>Use <b>Bold</b>, <i>Italic</i>, or <u>Underline</u></li><li>Add <b>H1/H2</b> headers, bullet lists, blockquotes, and code snippets</li></ul><hr><p>All changes autosave continuously.</p>"
+        noteEdit.text = "<h1 style=\"margin-top:6px; margin-bottom:4px; margin-left:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\"font-size:22px; font-weight:600; color:" + root.fgColor + ";\">Welcome to NoDo-pad</span></h1>" +
+                        "<p style=\"margin-top:2px; margin-bottom:2px; margin-left:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\"font-size:13px; font-weight:400; color:" + root.fgColor + ";\">Autosaving formattable notes with rich text styling.</span></p>" +
+                        "<ul style=\"margin-top:2px; margin-bottom:2px; margin-left:24px; -qt-list-indent:1;\"><li style=\"margin-top:2px; margin-bottom:2px; margin-left:0px; -qt-block-indent:0;\"><span style=\"font-size:13px; color:" + root.fgColor + ";\">Use </span><span style=\"font-size:13px; font-weight:700; color:" + root.fgColor + ";\">Bold</span><span style=\"font-size:13px; color:" + root.fgColor + ";\">, </span><span style=\"font-size:13px; font-style:italic; color:" + root.fgColor + ";\">Italic</span><span style=\"font-size:13px; color:" + root.fgColor + ";\">, or </span><span style=\"font-size:13px; text-decoration: underline; color:" + root.fgColor + ";\">Underline</span></li></ul>"
       }
+      root.internalFormattingUpdate = false
       root.notesLoaded = true
-      Qt.callLater(function() { root.updateActiveFormats() })
+      root.syncLineBlockMapFromDocument()
+      root.lastDocLength = noteEdit.length
+      root.lastParagraphCount = root.getParagraphs().length
+      Qt.callLater(function() {
+        root.rebuildDocument(noteEdit.cursorPosition, -1, -1, null)
+        root.updateActiveFormats()
+        root.updateVisualDecorations()
+      })
     }
   }
 
@@ -272,169 +301,690 @@ Item {
     return JSON.stringify(root.activeFormats)
   }
 
-  function updateActiveFormats() {
+  function getVisualDecosIpc() {
+    return JSON.stringify(root.visualDecorations)
+  }
+
+  function setCursorPosIpc(posStr) {
+    noteEdit.deselect()
+    var target = Math.min(noteEdit.length, Math.max(0, parseInt(posStr || "0")))
+    noteEdit.cursorPosition = target
+    root.updateActiveFormats()
+    return String(noteEdit.cursorPosition) + "/" + String(noteEdit.length)
+  }
+
+  function insertNewlineIpc() {
+    noteEdit.append("<p style=\"-qt-paragraph-type:empty; margin-top:2px; margin-bottom:2px; margin-left:0px;\"><br /></p>")
+    noteEdit.cursorPosition = noteEdit.length
+    root.updateActiveFormats()
+    return String(root.getParagraphs().length)
+  }
+
+  function typeTextIpc(txt) {
+    var p = noteEdit.cursorPosition
+    noteEdit.insert(p, String(txt || ""))
+    return String(noteEdit.cursorPosition)
+  }
+
+  function getLineStateIpc() {
+    var paras = root.getParagraphs()
+    var idx = root.getParagraphIndexAt(noteEdit.cursorPosition, paras)
+    var p = paras[idx] || { start: 0, end: 0, text: "" }
+    var bType = root.getParagraphBlockType(idx, p.start, p.end)
+    return JSON.stringify({
+      lineIdx: idx,
+      blockType: bType,
+      text: p.text,
+      activeFormats: root.activeFormats
+    })
+  }
+
+  function escapeHtml(s) {
+    if (!s) return ""
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+  }
+
+  function getParagraphs() {
+    if (!noteEdit) return [{ index: 0, start: 0, end: 0, text: "" }]
+    var full = noteEdit.getText(0, noteEdit.length)
+    var result = []
+    var start = 0
+    for (var i = 0; i <= full.length; i++) {
+      if (i === full.length || full.charCodeAt(i) === 0x2029 || full.charCodeAt(i) === 10) {
+        result.push({
+          index: result.length,
+          start: start,
+          end: i,
+          text: full.substring(start, i)
+        })
+        start = i + 1
+      }
+    }
+    if (result.length === 0) {
+      result.push({ index: 0, start: 0, end: 0, text: "" })
+    }
+    return result
+  }
+
+  function getParagraphIndexAt(pos, paras) {
+    var list = paras || root.getParagraphs()
+    for (var i = 0; i < list.length; i++) {
+      if (pos >= list[i].start && pos <= list[i].end) {
+        return i
+      }
+    }
+    return Math.max(0, list.length - 1)
+  }
+
+  function detectBlockFromFragment(frag) {
+    if (!frag) return "normal"
+    if (frag.indexOf("<hr") !== -1) return "hr"
+    if (frag.indexOf("<li") !== -1 || frag.indexOf("<ul") !== -1) return "list"
+    if (frag.indexOf("background-color:#050706") !== -1 || frag.indexOf("color:#78b86e") !== -1 || frag.indexOf("<pre") !== -1) return "code"
+    if (frag.indexOf("margin-left:24px") !== -1 || frag.indexOf("margin-left: 24px") !== -1 || frag.indexOf("margin-left:14px") !== -1 || frag.indexOf("margin-left:20px") !== -1 || frag.indexOf("blockquote") !== -1 || frag.indexOf("border-left") !== -1) return "quote"
+    if (frag.indexOf("<h1") !== -1 || frag.indexOf("font-size:22px") !== -1 || frag.indexOf("font-size:xx-large") !== -1) return "h1"
+    if (frag.indexOf("<h2") !== -1 || frag.indexOf("font-size:18px") !== -1 || frag.indexOf("font-size:x-large") !== -1) return "h2"
+    if (frag.indexOf("<h3") !== -1 || frag.indexOf("font-size:15px") !== -1 || frag.indexOf("font-size:large") !== -1) return "h3"
+    return "normal"
+  }
+
+  function syncLineBlockMapFromDocument() {
+    var paras = root.getParagraphs()
+    var nextMap = {}
+    for (var i = 0; i < paras.length; i++) {
+      var p = paras[i]
+      if (p.end > p.start) {
+        var frag = ""
+        try {
+          frag = noteEdit.getFormattedText(p.start, p.end)
+        } catch(e) {}
+        nextMap[i] = root.detectBlockFromFragment(frag)
+      } else {
+        nextMap[i] = root.lineBlockMap[i] || "normal"
+      }
+    }
+    root.lineBlockMap = nextMap
+  }
+
+  function getParagraphBlockType(lineIdx, pStart, pEnd) {
+    if (root.lineBlockMap && typeof root.lineBlockMap[lineIdx] === "string") {
+      return root.lineBlockMap[lineIdx]
+    }
+    if (pEnd > pStart) {
+      var frag = ""
+      try {
+        frag = noteEdit.getFormattedText(pStart, pEnd)
+      } catch(e) {}
+      return root.detectBlockFromFragment(frag)
+    }
+    return "normal"
+  }
+
+  function extractParagraphChars(pStart, pEnd, blockType) {
+    var plain = noteEdit.getText(pStart, pEnd)
+    if (!plain || plain.length === 0) return []
+
+    var frag = ""
+    try {
+      frag = noteEdit.getFormattedText(pStart, pEnd)
+    } catch(e) {}
+
+    var sfIdx = frag.indexOf("<!--StartFragment-->")
+    var efIdx = frag.indexOf("<!--EndFragment-->")
+    var body = (sfIdx !== -1 && efIdx !== -1 && efIdx > sfIdx)
+      ? frag.substring(sfIdx + 20, efIdx)
+      : frag
+
+    var chars = []
+    var charIdx = 0
+    var inB = 0
+    var inI = 0
+    var inU = 0
+    var spanBold = false
+    var spanItalic = false
+    var spanUnderline = false
+
+    var i = 0
+    while (i < body.length && charIdx < plain.length) {
+      if (body[i] === "<") {
+        var closeIdx = body.indexOf(">", i)
+        if (closeIdx === -1) break
+        var tagContent = body.substring(i + 1, closeIdx).trim()
+        var isClosing = tagContent.indexOf("/") === 0
+        var cleanTag = isClosing ? tagContent.substring(1).trim() : tagContent
+        var spaceIdx = cleanTag.search(/[\s\/]/)
+        var tagName = (spaceIdx === -1 ? cleanTag : cleanTag.substring(0, spaceIdx)).toLowerCase()
+
+        if (tagName === "b" || tagName === "strong") {
+          inB = isClosing ? Math.max(0, inB - 1) : (inB + 1)
+        } else if (tagName === "i" || tagName === "em") {
+          inI = isClosing ? Math.max(0, inI - 1) : (inI + 1)
+        } else if (tagName === "u") {
+          inU = isClosing ? Math.max(0, inU - 1) : (inU + 1)
+        } else if (tagName === "span") {
+          if (isClosing) {
+            spanBold = false
+            spanItalic = false
+            spanUnderline = false
+          } else {
+            var styleMatch = cleanTag.match(/style\s*=\s*"([^"]*)"/i)
+            var styleStr = styleMatch ? styleMatch[1].toLowerCase() : ""
+            if (blockType === "h1" || blockType === "h2" || blockType === "h3") {
+              spanBold = (styleStr.indexOf("word-spacing:0.1px") !== -1 || styleStr.indexOf("word-spacing: 0.1px") !== -1)
+            } else {
+              spanBold = (styleStr.indexOf("font-weight:700") !== -1 || styleStr.indexOf("font-weight: 700") !== -1 || styleStr.indexOf("font-weight:bold") !== -1)
+            }
+            if (blockType === "quote") {
+              spanItalic = (styleStr.indexOf("letter-spacing:0.1px") !== -1 || styleStr.indexOf("letter-spacing: 0.1px") !== -1)
+            } else {
+              spanItalic = (styleStr.indexOf("font-style:italic") !== -1 || styleStr.indexOf("font-style: italic") !== -1)
+            }
+            spanUnderline = (styleStr.indexOf("text-decoration: underline") !== -1 || styleStr.indexOf("text-decoration:underline") !== -1)
+          }
+        }
+        i = closeIdx + 1
+      } else if (body[i] === "&") {
+        var semiIdx = body.indexOf(";", i)
+        if (semiIdx !== -1 && semiIdx - i <= 10) {
+          i = semiIdx + 1
+        } else {
+          i++
+        }
+        chars.push({
+          ch: plain[charIdx],
+          bold: (inB > 0 || spanBold),
+          italic: (inI > 0 || spanItalic),
+          underline: (inU > 0 || spanUnderline)
+        })
+        charIdx++
+      } else {
+        var code = body.charCodeAt(i)
+        if (code === 10 || code === 13) {
+          i++
+          continue
+        }
+        chars.push({
+          ch: plain[charIdx],
+          bold: (inB > 0 || spanBold),
+          italic: (inI > 0 || spanItalic),
+          underline: (inU > 0 || spanUnderline)
+        })
+        charIdx++
+        i++
+      }
+    }
+
+    while (charIdx < plain.length) {
+      chars.push({
+        ch: plain[charIdx],
+        bold: false,
+        italic: false,
+        underline: false
+      })
+      charIdx++
+    }
+
+    return chars
+  }
+
+  function buildSpanHtml(blockType, textStr, isBold, isItalic, isUnderline) {
+    var fontSize = "13px"
+    if (blockType === "h1") fontSize = "22px"
+    else if (blockType === "h2") fontSize = "18px"
+    else if (blockType === "h3") fontSize = "15px"
+    else if (blockType === "code") fontSize = "12px"
+
+    var isHeading = (blockType === "h1" || blockType === "h2" || blockType === "h3")
+    var fontWeight = (isBold || isHeading) ? "700" : "400"
+    var extraBoldMarker = (isHeading && isBold) ? "word-spacing:0.1px;" : ""
+    var fontStyle = (blockType === "quote" || isItalic) ? "italic" : "normal"
+    var extraItalicMarker = (blockType === "quote" && isItalic) ? "letter-spacing:0.1px;" : ""
+    var textDeco = isUnderline ? "text-decoration: underline;" : ""
+    var textColor = blockType === "quote" ? String(root.accentColor) : (blockType === "code" ? "#78b86e" : String(root.fgColor))
+    var bgStyle = blockType === "code" ? "background-color:#050706;" : ""
+    var fontFam = blockType === "code" ? "font-family:'JetBrainsMono Nerd Font','monospace';" : "font-family:'JetBrainsMono Nerd Font';"
+
+    return "<span style=\"" + fontFam + "font-size:" + fontSize + ";font-weight:" + fontWeight + ";" + extraBoldMarker + "font-style:" + fontStyle + ";" + extraItalicMarker + textDeco + "color:" + textColor + ";" + bgStyle + "\">" + root.escapeHtml(textStr) + "</span>"
+  }
+
+  function buildParagraphHtml(blockType, chars) {
+    if (blockType === "hr") {
+      return "<hr />"
+    }
+
+    var inner = ""
+    if (!chars || chars.length === 0) {
+      inner = "<br />"
+    } else {
+      var runText = chars[0].ch
+      var rBold = chars[0].bold
+      var rItalic = chars[0].italic
+      var rUnder = chars[0].underline
+      for (var i = 1; i < chars.length; i++) {
+        if (chars[i].bold === rBold && chars[i].italic === rItalic && chars[i].underline === rUnder) {
+          runText += chars[i].ch
+        } else {
+          inner += root.buildSpanHtml(blockType, runText, rBold, rItalic, rUnder)
+          runText = chars[i].ch
+          rBold = chars[i].bold
+          rItalic = chars[i].italic
+          rUnder = chars[i].underline
+        }
+      }
+      inner += root.buildSpanHtml(blockType, runText, rBold, rItalic, rUnder)
+    }
+
+    var isEmpty = (!chars || chars.length === 0)
+    var emptyProp = isEmpty ? "-qt-paragraph-type:empty; " : ""
+
+    // Strict Indentation Rule: ONLY list, quote, and code are indented (24px).
+    // Normal text and Headers (H1, H2, H3) have 0px indent.
+    if (blockType === "h1") {
+      return "<h1 style=\"" + emptyProp + "margin-top:6px; margin-bottom:4px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">" + inner + "</h1>"
+    } else if (blockType === "h2") {
+      return "<h2 style=\"" + emptyProp + "margin-top:5px; margin-bottom:3px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">" + inner + "</h2>"
+    } else if (blockType === "h3") {
+      return "<h3 style=\"" + emptyProp + "margin-top:4px; margin-bottom:2px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">" + inner + "</h3>"
+    } else if (blockType === "list") {
+      return "<ul style=\"margin-top:2px; margin-bottom:2px; margin-left:24px; -qt-list-indent:1;\"><li style=\"" + emptyProp + "margin-top:2px; margin-bottom:2px; margin-left:0px; -qt-block-indent:0;\">" + inner + "</li></ul>"
+    } else if (blockType === "quote") {
+      return "<p style=\"" + emptyProp + "margin-top:4px; margin-bottom:4px; margin-left:24px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">" + inner + "</p>"
+    } else if (blockType === "code") {
+      return "<p style=\"" + emptyProp + "margin-top:4px; margin-bottom:4px; margin-left:24px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">" + inner + "</p>"
+    } else {
+      return "<p style=\"" + emptyProp + "margin-top:2px; margin-bottom:2px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">" + inner + "</p>"
+    }
+  }
+
+  function rebuildDocument(restoreCursorPos, restoreSelStart, restoreSelEnd, inlineMutation) {
+    if (!noteEdit) return
+    var paras = root.getParagraphs()
+    var htmlParts = []
+
+    for (var i = 0; i < paras.length; i++) {
+      var p = paras[i]
+      var bType = root.getParagraphBlockType(i, p.start, p.end)
+      var oldType = (inlineMutation && inlineMutation.oldBlockMap && inlineMutation.oldBlockMap[i]) ? inlineMutation.oldBlockMap[i] : bType
+      var chars = root.extractParagraphChars(p.start, p.end, oldType)
+
+      if (inlineMutation) {
+        for (var k = 0; k < chars.length; k++) {
+          var globalPos = p.start + k
+          if (globalPos >= inlineMutation.rangeStart && globalPos < inlineMutation.rangeEnd) {
+            if (inlineMutation.type === "clear") {
+              chars[k].bold = false
+              chars[k].italic = false
+              chars[k].underline = false
+            } else if (inlineMutation.type === "inline") {
+              chars[k][inlineMutation.prop] = inlineMutation.value
+            } else if (inlineMutation.type === "inlineAll") {
+              chars[k].bold = !!inlineMutation.bold
+              chars[k].italic = !!inlineMutation.italic
+              chars[k].underline = !!inlineMutation.underline
+            }
+          }
+        }
+      }
+
+      htmlParts.push(root.buildParagraphHtml(bType, chars))
+    }
+
+    root.internalFormattingUpdate = true
+    noteEdit.text = "<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /></head><body>" + htmlParts.join("") + "</body></html>"
+    if (restoreSelStart >= 0 && restoreSelEnd > restoreSelStart) {
+      noteEdit.select( Math.min(restoreSelStart, noteEdit.length), Math.min(restoreSelEnd, noteEdit.length) )
+    } else if (restoreCursorPos >= 0) {
+      noteEdit.cursorPosition = Math.min(restoreCursorPos, noteEdit.length)
+    }
+    root.lastDocLength = noteEdit.length
+    root.lastParagraphCount = paras.length
+    root.internalFormattingUpdate = false
+    root.updateVisualDecorations()
+  }
+
+  function updateVisualDecorations() {
     if (!noteEdit || !root.notesLoaded) return
+    var paras = root.getParagraphs()
+    var decos = []
+    var i = 0
+    while (i < paras.length) {
+      var bType = root.getParagraphBlockType(i, paras[i].start, paras[i].end)
+      if (bType === "quote" || bType === "code") {
+        var groupStart = paras[i].start
+        var groupEnd = paras[i].end
+        var j = i + 1
+        while (j < paras.length && root.getParagraphBlockType(j, paras[j].start, paras[j].end) === bType) {
+          groupEnd = paras[j].end
+          j++
+        }
+        try {
+          var rStart = noteEdit.positionToRectangle(groupStart)
+          var rEnd = noteEdit.positionToRectangle(groupEnd)
+          var topY = rStart.y
+          var botY = Math.max(topY + 18, rEnd.y + rEnd.height)
+          decos.push({
+            kind: bType,
+            y: topY,
+            height: botY - topY
+          })
+        } catch(e) {}
+        i = j
+      } else {
+        i++
+      }
+    }
+    root.visualDecorations = decos
+  }
+
+  function updateActiveFormats() {
+    if (!noteEdit || !root.notesLoaded || root.internalFormattingUpdate) return
     var start = noteEdit.selectionStart
     var end = noteEdit.selectionEnd
     var hasSelection = (start !== end && start >= 0 && end > start)
-
-    var p1 = hasSelection ? start : Math.max(0, noteEdit.cursorPosition - 1)
-    var p2 = hasSelection ? end : Math.min(noteEdit.length, noteEdit.cursorPosition + 1)
-    if (p2 <= p1 && noteEdit.length > 0) {
-      p1 = Math.max(0, noteEdit.cursorPosition)
-      p2 = Math.min(noteEdit.length, p1 + 1)
-    }
-
-    var inlineFrag = ""
-    try {
-      inlineFrag = noteEdit.getFormattedText(p1, p2)
-    } catch(e) {}
-
-    // For block detection (h1, h2, h3, list, quote, code), inspect the line bounds
-    var full = noteEdit.getText(0, noteEdit.length)
     var pos = noteEdit.cursorPosition
-    var lStart = full.lastIndexOf("\u2029", pos - 1)
-    if (lStart === -1) lStart = full.lastIndexOf("\n", pos - 1)
-    lStart = (lStart === -1 ? 0 : lStart + 1)
 
-    var lEnd = full.indexOf("\u2029", pos)
-    if (lEnd === -1) lEnd = full.indexOf("\n", pos)
-    if (lEnd === -1) lEnd = full.length
+    var paras = root.getParagraphs()
+    var lineIdx = root.getParagraphIndexAt(pos, paras)
+    var curPara = paras[lineIdx] || { start: 0, end: 0, text: "" }
+    var bType = root.getParagraphBlockType(lineIdx, curPara.start, curPara.end)
 
-    var qStart = lStart
-    var qEnd = Math.max(lStart + 1, lEnd)
-    if (qEnd > noteEdit.length) qEnd = noteEdit.length
-    if (qStart > 0 && qStart === qEnd) qStart = qStart - 1
+    var isBold = false
+    var isItalic = false
+    var isUnder = false
 
-    var lineFrag = ""
-    try {
-      lineFrag = noteEdit.getFormattedText(qStart, qEnd)
-    } catch(e) {}
-
-    var bFrag = inlineFrag + " " + lineFrag
-
-    var isBold = bFrag.indexOf("font-weight:700") !== -1 || bFrag.indexOf("font-weight:bold") !== -1 || bFrag.indexOf("<b>") !== -1
-    var isItalic = bFrag.indexOf("font-style:italic") !== -1 || bFrag.indexOf("<i>") !== -1
-    var isUnder = bFrag.indexOf("text-decoration: underline") !== -1 || bFrag.indexOf("<u>") !== -1
-    var isH1 = bFrag.indexOf("<h1") !== -1 || bFrag.indexOf("font-size:xx-large") !== -1
-    var isH2 = bFrag.indexOf("<h2") !== -1 || bFrag.indexOf("font-size:x-large") !== -1
-    var isH3 = bFrag.indexOf("<h3") !== -1 || bFrag.indexOf("font-size:large") !== -1
-    var isList = bFrag.indexOf("<li") !== -1 || bFrag.indexOf("<ul") !== -1
-    var isQuote = bFrag.indexOf("border-left") !== -1 || bFrag.indexOf("blockquote") !== -1
-    var isCode = bFrag.indexOf("<pre") !== -1 || bFrag.indexOf("font-family:'monospace'") !== -1 || bFrag.indexOf("background-color:#050706") !== -1 || bFrag.indexOf("color:#78b86e") !== -1
+    if (!hasSelection && root.hasPendingInline && pos === root.pendingInlineCursorPos) {
+      isBold = !!root.pendingInline.bold
+      isItalic = !!root.pendingInline.italic
+      isUnder = !!root.pendingInline.underline
+    } else if (curPara.end > curPara.start) {
+      var chars = root.extractParagraphChars(curPara.start, curPara.end, bType)
+      if (hasSelection) {
+        var sLocal = Math.max(0, start - curPara.start)
+        var eLocal = Math.min(chars.length, end - curPara.start)
+        if (eLocal > sLocal) {
+          isBold = true
+          isItalic = true
+          isUnder = true
+          for (var k = sLocal; k < eLocal; k++) {
+            if (!chars[k].bold) isBold = false
+            if (!chars[k].italic) isItalic = false
+            if (!chars[k].underline) isUnder = false
+          }
+        }
+      } else {
+        var localIdx = Math.max(0, Math.min(chars.length - 1, pos - curPara.start - 1))
+        if (pos === curPara.start && chars.length > 0) localIdx = 0
+        if (chars[localIdx]) {
+          isBold = !!chars[localIdx].bold
+          isItalic = !!chars[localIdx].italic
+          isUnder = !!chars[localIdx].underline
+        }
+      }
+    }
 
     root.activeFormats = {
       bold: isBold,
       italic: isItalic,
       underline: isUnder,
-      h1: isH1,
-      h2: isH2,
-      h3: isH3,
-      list: isList,
-      quote: isQuote,
-      code: isCode
+      h1: bType === "h1",
+      h2: bType === "h2",
+      h3: bType === "h3",
+      list: bType === "list",
+      quote: bType === "quote",
+      code: bType === "code"
     }
+    root.updateVisualDecorations()
+  }
+
+  function handleNoteTextEdited() {
+    if (!noteEdit || !root.notesLoaded || root.internalFormattingUpdate) return
+
+    var paras = root.getParagraphs()
+    var pos = noteEdit.cursorPosition
+    var curLineIdx = root.getParagraphIndexAt(pos, paras)
+    var newLen = noteEdit.length
+    var deltaLen = newLen - root.lastDocLength
+    var deltaParas = paras.length - root.lastParagraphCount
+
+    // 1. Handle paragraph splits (Enter) or merges (Backspace)
+    if (deltaParas > 0) {
+      var nextMap = {}
+      var prevLineIdx = Math.max(0, curLineIdx - 1)
+      var prevType = root.lineBlockMap[prevLineIdx] || "normal"
+      var exitedEmptyBlock = false
+
+      if ((prevType === "list" || prevType === "quote" || prevType === "code") &&
+          paras[prevLineIdx] && paras[prevLineIdx].text.trim().length === 0 &&
+          paras[curLineIdx] && paras[curLineIdx].text.trim().length === 0) {
+        // Pressing Enter on an empty list/quote/code item exits the block back to normal text
+        exitedEmptyBlock = true
+      }
+
+      for (var i = 0; i < paras.length; i++) {
+        if (i < curLineIdx) {
+          nextMap[i] = root.lineBlockMap[i] || "normal"
+        } else if (i === curLineIdx) {
+          if (exitedEmptyBlock) {
+            nextMap[prevLineIdx] = "normal"
+            nextMap[i] = "normal"
+          } else if (prevType === "list" || prevType === "quote" || prevType === "code") {
+            nextMap[i] = prevType
+          } else {
+            nextMap[i] = "normal"
+          }
+        } else {
+          nextMap[i] = root.lineBlockMap[i - deltaParas] || "normal"
+        }
+      }
+      root.lineBlockMap = nextMap
+      root.rebuildDocument(pos, -1, -1, null)
+      root.updateActiveFormats()
+      notesAutosaveTimer.restart()
+      return
+    } else if (deltaParas < 0) {
+      var mergedMap = {}
+      for (var m = 0; m < paras.length; m++) {
+        if (m <= curLineIdx) {
+          mergedMap[m] = root.lineBlockMap[m] || "normal"
+        } else {
+          mergedMap[m] = root.lineBlockMap[m - deltaParas] || "normal"
+        }
+      }
+      root.lineBlockMap = mergedMap
+    }
+
+    // 2. If characters were typed while pendingInline is active or on a newly formatted line
+    var curPara = paras[curLineIdx]
+    var curBlockType = root.lineBlockMap[curLineIdx] || "normal"
+    if (deltaLen > 0 && pos >= deltaLen) {
+      var insertStart = pos - deltaLen
+      var needRebuild = false
+      var mutation = null
+
+      if (root.hasPendingInline) {
+        needRebuild = true
+        mutation = {
+          type: "inlineAll",
+          bold: root.pendingInline.bold,
+          italic: root.pendingInline.italic,
+          underline: root.pendingInline.underline,
+          rangeStart: insertStart,
+          rangeEnd: pos
+        }
+        root.pendingInlineCursorPos = pos
+      } else if (curPara && curPara.end - curPara.start === deltaLen && curBlockType !== "normal") {
+        // First character(s) typed on an empty block-formatted line
+        needRebuild = true
+      }
+
+      if (needRebuild) {
+        root.rebuildDocument(pos, -1, -1, mutation)
+        root.updateActiveFormats()
+        notesAutosaveTimer.restart()
+        return
+      }
+    }
+
+    root.lastDocLength = newLen
+    root.lastParagraphCount = paras.length
+    notesAutosaveTimer.restart()
+    root.updateActiveFormats()
   }
 
   // Formatting operations for Notepad
   function applyFormat(type) {
+    if (!noteEdit) return
     var start = noteEdit.selectionStart
     var end = noteEdit.selectionEnd
     var hasSelection = (start !== end && start >= 0 && end > start)
-    var sel = hasSelection ? noteEdit.getText(start, end) : ""
+    var pos = noteEdit.cursorPosition
+    var paras = root.getParagraphs()
+    var curLineIdx = root.getParagraphIndexAt(pos, paras)
+    var curPara = paras[curLineIdx] || { index: 0, start: 0, end: 0, text: "" }
 
-    var targetStart = start
-    var targetEnd = end
-    var textToFormat = sel
+    var isBlock = (type === "h1" || type === "h2" || type === "h3" || type === "list" || type === "quote" || type === "code")
+    var isInline = (type === "bold" || type === "italic" || type === "underline")
 
-    // For block formatting (quote, code, list, h1, h2, h3), if nothing is selected,
-    // operate on the current paragraph / line around the cursor
-    var isBlock = (type === "quote" || type === "code" || type === "list" || type === "h1" || type === "h2" || type === "h3")
-    if (!hasSelection && isBlock) {
-      var full = noteEdit.getText(0, noteEdit.length)
-      var pos = noteEdit.cursorPosition
-      var pStart = full.lastIndexOf("\u2029", pos - 1)
-      if (pStart === -1) pStart = full.lastIndexOf("\n", pos - 1)
-      pStart = (pStart === -1 ? 0 : pStart + 1)
+    if (isBlock) {
+      var isCurrentlyActive = !!root.activeFormats[type]
+      var targetBlock = isCurrentlyActive ? "normal" : type
 
-      var pEnd = full.indexOf("\u2029", pos)
-      if (pEnd === -1) pEnd = full.indexOf("\n", pos)
-      if (pEnd === -1) pEnd = full.length
+      var startLine = hasSelection ? root.getParagraphIndexAt(start, paras) : curLineIdx
+      var endLine = hasSelection ? root.getParagraphIndexAt(Math.max(start, end - 1), paras) : curLineIdx
 
-      targetStart = pStart
-      targetEnd = pEnd
-      textToFormat = full.substring(pStart, pEnd)
-    }
-
-    var content = textToFormat || ""
-    var formatted = ""
-
-    switch (type) {
-      case "bold":
-        formatted = "<b>" + (hasSelection ? sel : "&nbsp;") + "</b>"
-        break
-      case "italic":
-        formatted = "<i>" + (hasSelection ? sel : "&nbsp;") + "</i>"
-        break
-      case "underline":
-        formatted = "<u>" + (hasSelection ? sel : "&nbsp;") + "</u>"
-        break
-      case "h1":
-        formatted = "<h1>" + (content || "&nbsp;") + "</h1>"
-        break
-      case "h2":
-        formatted = "<h2>" + (content || "&nbsp;") + "</h2>"
-        break
-      case "h3":
-        formatted = "<h3>" + (content || "&nbsp;") + "</h3>"
-        break
-      case "list":
-        if (content.indexOf("\n") !== -1 || content.indexOf("\u2029") !== -1) {
-          var lines = content.split(/[\n\u2029]/)
-          var items = ""
-          for (var i = 0; i < lines.length; i++) {
-            if (lines[i].trim().length > 0) items += "<li style=\"margin-left: 20px;\">" + lines[i] + "</li>"
-          }
-          formatted = "<ul style=\"margin-left: 20px; -qt-list-indent: 1;\">" + (items || "<li style=\"margin-left: 20px;\">&nbsp;</li>") + "</ul>"
+      var oldMap = {}
+      var nextMap = {}
+      for (var i = 0; i < paras.length; i++) {
+        var existing = root.getParagraphBlockType(i, paras[i].start, paras[i].end)
+        oldMap[i] = existing
+        if (i >= startLine && i <= endLine) {
+          nextMap[i] = targetBlock
         } else {
-          formatted = "<ul style=\"margin-left: 20px; -qt-list-indent: 1;\"><li style=\"margin-left: 20px;\">" + (content || "&nbsp;") + "</li></ul>"
+          nextMap[i] = existing
         }
-        break
-      case "quote":
-        // Indented blockquote with visible continuous left rule and accent/italic styling
-        formatted = "<table border=\"0\" style=\"margin-left: 14px; margin-top: 6px; margin-bottom: 6px;\" cellspacing=\"0\" cellpadding=\"0\">" +
-                    "<tr><td style=\"padding-left: 10px; border-left: 3px solid " + root.accentColor + ";\">" +
-                    "<p style=\"font-style: italic; color: " + root.accentColor + "; margin: 0;\">" + (content || "&nbsp;") + "</p>" +
-                    "</td></tr></table>"
-        break
-      case "code":
-        // Indented code block with monospace font and darker background card, clearly denoting code snippet
-        formatted = "<pre style=\"margin-left: 20px; margin-top: 6px; margin-bottom: 6px; background-color: #050706; padding: 6px 12px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08);\"><span style=\"font-family:'monospace'; color: #78b86e;\">" + (content || "&nbsp;") + "</span></pre>"
-        break
-      case "hr":
-        formatted = "<hr />"
-        break
-      case "clear":
-        formatted = content
-        break
+      }
+      root.lineBlockMap = nextMap
+      root.rebuildDocument(pos, hasSelection ? start : -1, hasSelection ? end : -1, {
+        type: "none",
+        rangeStart: -1,
+        rangeEnd: -1,
+        oldBlockMap: oldMap
+      })
+      noteEdit.forceActiveFocus()
+      notesAutosaveTimer.restart()
+      root.updateActiveFormats()
+      return
     }
 
-    if (hasSelection || isBlock) {
-      noteEdit.remove(targetStart, targetEnd)
-      noteEdit.insert(targetStart, formatted)
+    if (isInline) {
+      var targetState = !root.activeFormats[type]
+
       if (hasSelection) {
-        noteEdit.select(targetStart, targetStart + formatted.length)
+        root.pendingInline = {
+          bold: type === "bold" ? targetState : root.activeFormats.bold,
+          italic: type === "italic" ? targetState : root.activeFormats.italic,
+          underline: type === "underline" ? targetState : root.activeFormats.underline
+        }
+        root.hasPendingInline = false
+        root.rebuildDocument(pos, start, end, {
+          type: "inline",
+          prop: type,
+          value: targetState,
+          rangeStart: start,
+          rangeEnd: end
+        })
       } else {
-        noteEdit.cursorPosition = targetStart + formatted.length
+        // No selection: update pending typing format AND if cursor touches existing non-space text on the line, toggle that run/line too
+        root.pendingInline = {
+          bold: type === "bold" ? targetState : root.activeFormats.bold,
+          italic: type === "italic" ? targetState : root.activeFormats.italic,
+          underline: type === "underline" ? targetState : root.activeFormats.underline
+        }
+        root.hasPendingInline = true
+        root.pendingInlineCursorPos = pos
+
+        var prevChar = (pos > curPara.start) ? noteEdit.getText(pos - 1, pos) : ""
+        var nextChar = (pos < curPara.end) ? noteEdit.getText(pos, pos + 1) : ""
+        var touchingWord = (curPara.end > curPara.start) && (prevChar !== " " && prevChar !== "\t") && (prevChar !== "" || nextChar !== "")
+
+        if (touchingWord) {
+          var bType = root.getParagraphBlockType(curLineIdx, curPara.start, curPara.end)
+          var chars = root.extractParagraphChars(curPara.start, curPara.end, bType)
+          var rStart = curPara.start
+          var rEnd = curPara.end
+
+          if (!targetState && chars.length > 0) {
+            // Find contiguous run around cursor that currently has this inline format active
+            var pivot = Math.max(0, Math.min(chars.length - 1, pos - curPara.start - 1))
+            if (pos === curPara.start) pivot = 0
+            if (chars[pivot] && chars[pivot][type]) {
+              var sIdx = pivot
+              while (sIdx > 0 && chars[sIdx - 1][type]) sIdx--
+              var eIdx = pivot + 1
+              while (eIdx < chars.length && chars[eIdx][type]) eIdx++
+              rStart = curPara.start + sIdx
+              rEnd = curPara.start + eIdx
+            }
+          }
+
+          root.rebuildDocument(pos, -1, -1, {
+            type: "inline",
+            prop: type,
+            value: targetState,
+            rangeStart: rStart,
+            rangeEnd: rEnd
+          })
+          root.pendingInlineCursorPos = noteEdit.cursorPosition
+        }
       }
-    } else {
-      var p = noteEdit.cursorPosition
-      noteEdit.insert(p, formatted)
-      noteEdit.cursorPosition = p + formatted.length
+
+      noteEdit.forceActiveFocus()
+      notesAutosaveTimer.restart()
+      root.updateActiveFormats()
+      return
     }
-    noteEdit.forceActiveFocus()
-    notesAutosaveTimer.restart()
-    Qt.callLater(function() { root.updateActiveFormats() })
+
+    if (type === "clear") {
+      var cStartLine = hasSelection ? root.getParagraphIndexAt(start, paras) : curLineIdx
+      var cEndLine = hasSelection ? root.getParagraphIndexAt(Math.max(start, end - 1), paras) : curLineIdx
+      var cOldMap = {}
+      var cNextMap = {}
+      for (var c = 0; c < paras.length; c++) {
+        var ex = root.getParagraphBlockType(c, paras[c].start, paras[c].end)
+        cOldMap[c] = ex
+        cNextMap[c] = (c >= cStartLine && c <= cEndLine) ? "normal" : ex
+      }
+      root.lineBlockMap = cNextMap
+      root.pendingInline = { bold: false, italic: false, underline: false }
+      root.hasPendingInline = true
+      root.pendingInlineCursorPos = pos
+
+      var clearFrom = hasSelection ? start : curPara.start
+      var clearTo = hasSelection ? end : curPara.end
+      root.rebuildDocument(pos, hasSelection ? start : -1, hasSelection ? end : -1, {
+        type: "clear",
+        rangeStart: clearFrom,
+        rangeEnd: clearTo,
+        oldBlockMap: cOldMap
+      })
+      noteEdit.forceActiveFocus()
+      notesAutosaveTimer.restart()
+      root.updateActiveFormats()
+      return
+    }
+
+    if (type === "hr") {
+      noteEdit.insert(pos, "<hr />")
+      root.syncLineBlockMapFromDocument()
+      noteEdit.forceActiveFocus()
+      notesAutosaveTimer.restart()
+      Qt.callLater(function() { root.updateActiveFormats() })
+      return
+    }
   }
 
   // --- Floating Window ---
@@ -734,14 +1284,43 @@ Item {
                 topPadding: 14
                 bottomPadding: 24
 
-                onCursorPositionChanged: root.updateActiveFormats()
-                onSelectionStartChanged: root.updateActiveFormats()
-                onSelectionEndChanged: root.updateActiveFormats()
+                onWidthChanged: Qt.callLater(function() { root.updateVisualDecorations() })
+                onContentHeightChanged: Qt.callLater(function() { root.updateVisualDecorations() })
+
+                onCursorPositionChanged: {
+                  if (!root.internalFormattingUpdate) {
+                    if (root.hasPendingInline && noteEdit.length === root.lastDocLength && noteEdit.cursorPosition !== root.pendingInlineCursorPos) {
+                      root.hasPendingInline = false
+                    }
+                    root.updateActiveFormats()
+                  }
+                }
+                onSelectionStartChanged: {
+                  if (!root.internalFormattingUpdate) root.updateActiveFormats()
+                }
+                onSelectionEndChanged: {
+                  if (!root.internalFormattingUpdate) root.updateActiveFormats()
+                }
 
                 onTextChanged: {
-                  if (root.notesLoaded) {
-                    notesAutosaveTimer.restart()
-                    root.updateActiveFormats()
+                  if (root.notesLoaded && !root.internalFormattingUpdate) {
+                    root.handleNoteTextEdited()
+                  }
+                }
+
+                // Visual block decorations for Quote (continuous left vertical bar) and Code (indented darker background box)
+                Repeater {
+                  model: root.visualDecorations
+                  Rectangle {
+                    z: -1
+                    x: modelData.kind === "quote" ? (noteEdit.leftPadding + 10) : (noteEdit.leftPadding + 16)
+                    y: modelData.kind === "quote" ? (modelData.y + 1) : (modelData.y - 2)
+                    width: modelData.kind === "quote" ? 3 : Math.max(80, noteEdit.width - noteEdit.leftPadding - noteEdit.rightPadding - 16)
+                    height: modelData.kind === "quote" ? Math.max(16, modelData.height - 2) : Math.max(20, modelData.height + 4)
+                    radius: modelData.kind === "quote" ? 1.5 : 4
+                    color: modelData.kind === "quote" ? root.accentColor : "#050706"
+                    border.width: modelData.kind === "code" ? 1 : 0
+                    border.color: modelData.kind === "code" ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
                   }
                 }
               }
