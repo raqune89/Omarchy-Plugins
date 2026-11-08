@@ -50,7 +50,7 @@ cd Omarchy-Plugins
 
 | Plugin ID | Tool Name | Description | Keybindings | Documentation |
 | :--- | :--- | :--- | :--- | :--- |
-| `raqune.nodo-pad` | **NoDo-pad** | Floating dual-tab formattable scratchpad & interactive todo list | `SUPER + ALT + T` (Toggle)<br>`SUPER + ALT + P` (Pin)<br>`SUPER + ALT + N` (Switch tab) | [README](plugins/raqune.nodo-pad/README.md) |
+| `raqune.nodo-pad` | **NoDo-pad** | Floating dual-tab formattable scratchpad & interactive todo list | `SUPER + ALT + T` (Toggle)<br>`SUPER + ALT + N` (Switch tab) | [README](plugins/raqune.nodo-pad/README.md) |
 
 ### CAD-Themed Core Bar Widgets
 Also included so the entire bar shares a unified tactical CAD visual language:

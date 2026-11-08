@@ -15,9 +15,9 @@ No menu-bar icon required — opens on-demand as a lightweight, floating utility
   - **Italic** (`Ctrl+I` or toolbar `I`)
   - **Underline** (`Ctrl+U` or toolbar `U`)
   - **Headers**: `H1`, `H2`, `H3`
-  - **Bullet Lists**: `• List`
-  - **Blockquotes**: `❝ Quote`
-  - **Code Blocks**: `</> Code`
+  - **Bullet Lists**: `• List` (indented block list)
+  - **Blockquotes**: `❝ Quote` (prominently indented italicized block)
+  - **Code Blocks**: `</> Code` (indented monospace block with dark background card)
   - **Horizontal Dividers**: `― Line`
   - **Clear Format**: `⌫ Clear`
 
@@ -35,7 +35,6 @@ No menu-bar icon required — opens on-demand as a lightweight, floating utility
 | Shortcut | Description | Action |
 |---|---|---|
 | `SUPER + ALT + T` | Toggle NoDo-pad | Opens / closes the floating NoDo-pad window |
-| `SUPER + ALT + P` | Pin / Unpin NoDo-pad | Toggles window pin state across all workspaces |
 | `SUPER + ALT + N` | Switch Tab | Cycles between Notepad and Todo List |
 | Header Click & Drag | Move Window | Drag anywhere on the header to reposition window |
 | `Escape` | Dismiss Window | Closes NoDo-pad |

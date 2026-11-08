@@ -60,12 +60,11 @@ EOF
 -- NoDo-pad floating window rule
 o.window({ class = "^org.quickshell$", title = "^NoDo-pad$" }, { float = true, size = { 680, 600 } })
 
--- NoDo-pad: Toggle (SUPER + ALT + T), Pin (SUPER + ALT + P), Switch tab (SUPER + ALT + N)
+-- NoDo-pad: Toggle (SUPER + ALT + T), Switch tab (SUPER + ALT + N)
 o.bind("SUPER + ALT + T", "Toggle NoDo-pad", "omarchy-shell shell toggle raqune.nodo-pad")
-o.bind("SUPER + ALT + P", "Toggle pin NoDo-pad", hl.dsp.window.pin())
 o.bind("SUPER + ALT + N", "Switch NoDo-pad tab", "omarchy-shell shell call raqune.nodo-pad switchTab")
 EOF
-    echo "  [+] Added NoDo-pad keybindings (SUPER + ALT + T, SUPER + ALT + P, SUPER + ALT + N) to ${BINDINGS_LUA}"
+    echo "  [+] Added NoDo-pad keybindings (SUPER + ALT + T, SUPER + ALT + N) to ${BINDINGS_LUA}"
   else
     echo "  [=] NoDo-pad keybindings already present in ${BINDINGS_LUA}"
   fi

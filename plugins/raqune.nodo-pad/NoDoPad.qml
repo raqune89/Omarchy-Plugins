@@ -23,9 +23,6 @@ Item {
   // Active Tab: 0 = Notes, 1 = Todo List
   property int activeTab: 0
 
-  // Pin Status
-  property bool isPinned: false
-
   // Theme Colors
   readonly property color bgColor: Commons.Color.background
   readonly property color fgColor: Commons.Color.foreground
@@ -69,7 +66,6 @@ Item {
     closingFromHost = false
     root.opened = true
     window.visible = true
-    checkPinStatus()
   }
 
   function close() {
@@ -99,37 +95,6 @@ Item {
     root.activeTab = (root.activeTab === 0 ? 1 : 0)
     root.statusMessage = "Switched to " + (root.activeTab === 0 ? "Notepad" : "Todo List")
     return "tab:" + root.activeTab
-  }
-
-  function togglePin() {
-    Util.execArgv(["sh", "-c", "hyprctl dispatch 'hl.dsp.window.pin()' >/dev/null 2>&1 || hyprctl dispatch pin activewindow >/dev/null 2>&1"])
-    pinCheckTimer.restart()
-    return "ok"
-  }
-
-  function checkPinStatus() {
-    pinChecker.running = true
-  }
-
-  // Pin state checker process
-  Process {
-    id: pinChecker
-    command: ["sh", "-c", "hyprctl clients -j 2>/dev/null | jq -r '.[] | select(.title == \"NoDo-pad\") | .pinned' 2>/dev/null || echo false"]
-    running: false
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var str = text.trim()
-        root.isPinned = (str === "true" || str === "1")
-      }
-    }
-  }
-
-  Timer {
-    id: pinCheckTimer
-    interval: 200
-    repeat: false
-    onTriggered: checkPinStatus()
   }
 
   // --- File Storage ---
@@ -295,61 +260,92 @@ Item {
     var end = noteEdit.selectionEnd
     var hasSelection = (start !== end && start >= 0 && end > start)
     var sel = hasSelection ? noteEdit.getText(start, end) : ""
+
+    var targetStart = start
+    var targetEnd = end
+    var textToFormat = sel
+
+    // For block formatting (quote, code, list, h1, h2, h3), if nothing is selected,
+    // operate on the current paragraph / line around the cursor
+    var isBlock = (type === "quote" || type === "code" || type === "list" || type === "h1" || type === "h2" || type === "h3")
+    if (!hasSelection && isBlock) {
+      var full = noteEdit.getText(0, noteEdit.length)
+      var pos = noteEdit.cursorPosition
+      var pStart = full.lastIndexOf("\u2029", pos - 1)
+      if (pStart === -1) pStart = full.lastIndexOf("\n", pos - 1)
+      pStart = (pStart === -1 ? 0 : pStart + 1)
+
+      var pEnd = full.indexOf("\u2029", pos)
+      if (pEnd === -1) pEnd = full.indexOf("\n", pos)
+      if (pEnd === -1) pEnd = full.length
+
+      targetStart = pStart
+      targetEnd = pEnd
+      textToFormat = full.substring(pStart, pEnd)
+    }
+
+    var content = textToFormat || ""
     var formatted = ""
 
     switch (type) {
       case "bold":
-        formatted = "<b>" + (sel || "Bold Text") + "</b>"
+        formatted = "<b>" + (hasSelection ? sel : "&nbsp;") + "</b>"
         break
       case "italic":
-        formatted = "<i>" + (sel || "Italic Text") + "</i>"
+        formatted = "<i>" + (hasSelection ? sel : "&nbsp;") + "</i>"
         break
       case "underline":
-        formatted = "<u>" + (sel || "Underlined Text") + "</u>"
+        formatted = "<u>" + (hasSelection ? sel : "&nbsp;") + "</u>"
         break
       case "h1":
-        formatted = "<h1>" + (sel || "Heading 1") + "</h1>"
+        formatted = "<h1>" + (content || "&nbsp;") + "</h1>"
         break
       case "h2":
-        formatted = "<h2>" + (sel || "Heading 2") + "</h2>"
+        formatted = "<h2>" + (content || "&nbsp;") + "</h2>"
         break
       case "h3":
-        formatted = "<h3>" + (sel || "Heading 3") + "</h3>"
+        formatted = "<h3>" + (content || "&nbsp;") + "</h3>"
         break
       case "list":
-        if (hasSelection) {
-          var lines = sel.split("\n")
+        if (content.indexOf("\n") !== -1 || content.indexOf("\u2029") !== -1) {
+          var lines = content.split(/[\n\u2029]/)
           var items = ""
           for (var i = 0; i < lines.length; i++) {
-            if (lines[i].trim()) items += "<li>" + lines[i] + "</li>"
+            if (lines[i].trim().length > 0) items += "<li style=\"margin-left: 20px;\">" + lines[i] + "</li>"
           }
-          formatted = "<ul>" + (items || "<li>" + sel + "</li>") + "</ul>"
+          formatted = "<ul style=\"margin-left: 20px; -qt-list-indent: 1;\">" + (items || "<li style=\"margin-left: 20px;\">&nbsp;</li>") + "</ul>"
         } else {
-          formatted = "<ul><li>List item</li></ul>"
+          formatted = "<ul style=\"margin-left: 20px; -qt-list-indent: 1;\"><li style=\"margin-left: 20px;\">" + (content || "&nbsp;") + "</li></ul>"
         }
         break
       case "quote":
-        formatted = "<blockquote style=\"margin: 6px 0 6px 14px; padding-left: 10px; border-left: 2px solid " + root.accentColor + "; color: " + root.mutedColor + ";\">" + (sel || "Quote block") + "</blockquote>"
+        // Indented blockquote with visible left rule and accent/italic styling, no placeholder text
+        formatted = "<p style=\"margin-left: 24px; -qt-block-indent: 1; font-style: italic; color: " + root.accentColor + ";\">" + (content || "&nbsp;") + "</p>"
         break
       case "code":
-        formatted = "<pre style=\"background-color: rgba(255,255,255,0.08); padding: 6px 10px; border-radius: 4px; font-family: monospace;\"><code>" + (sel || "code snippet") + "</code></pre>"
+        // Indented code block with monospace font and subtle dark background, no placeholder text
+        formatted = "<pre style=\"margin-left: 20px; background-color: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 4px;\"><span style=\"font-family:'monospace';\">" + (content || "&nbsp;") + "</span></pre>"
         break
       case "hr":
         formatted = "<hr />"
         break
       case "clear":
-        formatted = sel
+        formatted = content
         break
     }
 
-    if (hasSelection) {
-      noteEdit.remove(start, end)
-      noteEdit.insert(start, formatted)
-      noteEdit.select(start, start + formatted.length)
+    if (hasSelection || isBlock) {
+      noteEdit.remove(targetStart, targetEnd)
+      noteEdit.insert(targetStart, formatted)
+      if (hasSelection) {
+        noteEdit.select(targetStart, targetStart + formatted.length)
+      } else {
+        noteEdit.cursorPosition = targetStart + formatted.length
+      }
     } else {
-      var pos = noteEdit.cursorPosition
-      noteEdit.insert(pos, formatted)
-      noteEdit.cursorPosition = pos + formatted.length
+      var p = noteEdit.cursorPosition
+      noteEdit.insert(p, formatted)
+      noteEdit.cursorPosition = p + formatted.length
     }
     noteEdit.forceActiveFocus()
     notesAutosaveTimer.restart()
@@ -366,9 +362,7 @@ Item {
     visible: false
 
     onVisibleChanged: {
-      if (visible) {
-        root.checkPinStatus()
-      } else if (!root.closingFromHost && root.shell && typeof root.shell.hide === "function") {
+      if (!visible && !root.closingFromHost && root.shell && typeof root.shell.hide === "function") {
         root.shell.hide("raqune.nodo-pad")
       }
     }
@@ -377,11 +371,6 @@ Item {
     Shortcut {
       sequence: "Super+Alt+N"
       onActivated: root.switchTab()
-    }
-
-    Shortcut {
-      sequence: "Super+Alt+P"
-      onActivated: root.togglePin()
     }
 
     Shortcut {
@@ -424,7 +413,7 @@ Item {
           border.color: root.borderCol
           border.width: 1
 
-          // Drag gesture over the header bar
+          // Drag gesture across the whole header bar
           MouseArea {
             id: dragArea
             anchors.fill: parent
@@ -436,14 +425,14 @@ Item {
 
           Row {
             anchors.fill: parent
-            anchors.leftMargin: 12
-            anchors.rightMargin: 10
-            spacing: 8
+            anchors.leftMargin: 14
+            anchors.rightMargin: 14
+            spacing: 12
 
             // App Icon & Title
             Row {
               id: titleGroup
-              width: 130
+              width: 120
               height: parent.height
               spacing: 8
 
@@ -458,7 +447,7 @@ Item {
 
               Text {
                 anchors.verticalCenter: parent.verticalCenter
-                width: 102
+                width: 92
                 text: "NoDo-pad"
                 font.family: Style.font.family
                 font.pixelSize: 14
@@ -472,9 +461,9 @@ Item {
             // Tab Buttons in Header
             Row {
               id: tabButtonGroup
-              width: parent.width - titleGroup.width - windowActionGroup.width - 24
+              width: parent.width - titleGroup.width - 24
               height: parent.height
-              spacing: 6
+              spacing: 8
 
               // Tab 1 Button: Notepad
               Rectangle {
@@ -543,68 +532,6 @@ Item {
                   anchors.fill: parent
                   cursorShape: Qt.PointingHandCursor
                   onClicked: { root.activeTab = 1 }
-                }
-              }
-            }
-
-            // Window Actions: Pin & Close
-            Row {
-              id: windowActionGroup
-              width: 64
-              height: parent.height
-              spacing: 6
-
-              // Pin Toggle Button
-              Rectangle {
-                anchors.verticalCenter: parent.verticalCenter
-                width: 28
-                height: 28
-                radius: 4
-                color: root.isPinned ? root.accentColor : Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.06)
-                border.color: root.isPinned ? root.accentColor : root.borderCol
-                border.width: 1
-
-                Text {
-                  anchors.centerIn: parent
-                  text: "📌"
-                  font.pixelSize: 13
-                }
-
-                MouseArea {
-                  anchors.fill: parent
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: {
-                    root.togglePin()
-                  }
-                }
-              }
-
-              // Close Button
-              Rectangle {
-                anchors.verticalCenter: parent.verticalCenter
-                width: 28
-                height: 28
-                radius: 4
-                color: closeHover.containsMouse ? root.urgentColor : Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.06)
-                border.color: root.borderCol
-                border.width: 1
-
-                Text {
-                  anchors.centerIn: parent
-                  text: "✕"
-                  font.pixelSize: 13
-                  font.bold: true
-                  color: closeHover.containsMouse ? "#ffffff" : root.fgColor
-                }
-
-                MouseArea {
-                  id: closeHover
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: {
-                    root.requestClose()
-                  }
                 }
               }
             }
@@ -1111,7 +1038,7 @@ Item {
               anchors.verticalCenter: parent.verticalCenter
               width: 240
               horizontalAlignment: Text.AlignRight
-              text: "Super+Alt+T: Toggle | Super+Alt+N: Tab | Super+Alt+P: Pin"
+              text: "Super+Alt+T: Toggle | Super+Alt+N: Switch Tab | Esc: Dismiss"
               font.family: Style.font.family
               font.pixelSize: 10
               color: root.mutedColor
