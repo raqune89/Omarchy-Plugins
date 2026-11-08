@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "raqune.nodo-pad",
+  "name": "NoDo-pad",
+  "version": "1.0.0",
+  "author": "raqune",
+  "description": "Floating dual-tab formattable scratchpad & interactive todo list",
+  "kinds": [
+    "panel"
+  ],
+  "entryPoints": {
+    "panel": "NoDoPad.qml"
+  },
+  "panel": {
+    "displayName": "NoDo-pad",
+    "description": "Floating dual-tab formattable scratchpad & interactive todo list",
+    "keepLoaded": true
+  }
+}

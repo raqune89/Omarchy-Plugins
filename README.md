@@ -46,6 +46,12 @@ cd Omarchy-Plugins
 | 3 | `jesseburlamaque.antigravity-usage` | **Antigravity Usage** | Antigravity AI quota and active session monitor (with custom CAD icon template) | [README](plugins/jesseburlamaque.antigravity-usage/README.md) |
 | 5 | `raqune.selective-reading` | **Selective Reading** | Formatting-aware F5-TTS + RVC v2 GPU TTS reader (`SUPER + SHIFT + R` start/stop, `SUPER + R` pause/resume) with **Morgan Freeman**, **Stephen Fry**, & **Matthew McConaughey** voices | [README](plugins/raqune.selective-reading/README.md) |
 
+### Floating On-Demand Tools (No Status-Bar Icon)
+
+| Plugin ID | Tool Name | Description | Keybindings | Documentation |
+| :--- | :--- | :--- | :--- | :--- |
+| `raqune.nodo-pad` | **NoDo-pad** | Floating dual-tab formattable scratchpad & interactive todo list | `SUPER + ALT + T` (Toggle)<br>`SUPER + ALT + P` (Pin)<br>`SUPER + ALT + N` (Switch tab) | [README](plugins/raqune.nodo-pad/README.md) |
+
 ### CAD-Themed Core Bar Widgets
 Also included so the entire bar shares a unified tactical CAD visual language:
 - **Left**: [`raqune.menu`](plugins/raqune.menu/README.md), [`raqune.workspaces`](plugins/raqune.workspaces/README.md)
