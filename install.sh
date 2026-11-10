@@ -25,6 +25,25 @@ echo "  [+] Installed selective-reading CLI to ${BIN_DEST}/selective-reading"
 echo "  [*] Ensuring F5-TTS + RVC v2 celebrity voice models (Morgan Freeman, Stephen Fry & Matthew McConaughey) are cached..."
 "${BIN_DEST}/selective-reading" setup || true
 
+# 2b. Install Media Equalizer CLI, presets, and background services
+cp -f "${REPO_DIR}/bin/media-equalizer" "${BIN_DEST}/media-equalizer"
+chmod +x "${BIN_DEST}/media-equalizer"
+echo "  [+] Installed media-equalizer CLI to ${BIN_DEST}/media-equalizer"
+
+mkdir -p "${HOME}/.local/share/easyeffects/output"
+mkdir -p "${HOME}/.config/easyeffects/db"
+cp -f "${REPO_DIR}/config/equalizer/easyeffectsrc" "${HOME}/.config/easyeffects/db/easyeffectsrc"
+cp -f "${REPO_DIR}/config/equalizer/presets/"*.json "${HOME}/.local/share/easyeffects/output/"
+echo "  [+] Installed EasyEffects headless configuration and equalizer presets"
+
+mkdir -p "${HOME}/.config/systemd/user"
+cp -f "${REPO_DIR}/config/systemd/user/"*.service "${HOME}/.config/systemd/user/" 2>/dev/null || true
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl --user daemon-reload || true
+  systemctl --user enable --now easyeffects.service omarchy-media-equalizer.service || true
+  echo "  [+] Enabled and started easyeffects and omarchy-media-equalizer systemd user services"
+fi
+
 # 3. Install theme-set hook for live CAD SVG icon color rendering
 mkdir -p "${HOOKS_DEST}"
 cp -f "${REPO_DIR}/hooks/theme-set.d/20-sync-cad-icons" "${HOOKS_DEST}/20-sync-cad-icons"
@@ -67,6 +86,17 @@ EOF
     echo "  [+] Added NoDo-pad keybindings (SUPER + ALT + T, SUPER + ALT + N) to ${BINDINGS_LUA}"
   else
     echo "  [=] NoDo-pad keybindings already present in ${BINDINGS_LUA}"
+  fi
+
+  if ! grep -q "media-equalizer" "${BINDINGS_LUA}"; then
+    cat >> "${BINDINGS_LUA}" <<EOF
+
+-- Media Equalizer: Cycle equalizer modes (SUPER + ALT + E)
+o.bind("SUPER + ALT + E", "Equalizer mode toggle", "${HOME}/.local/bin/media-equalizer next")
+EOF
+    echo "  [+] Added Media Equalizer keybinding (SUPER + ALT + E) to ${BINDINGS_LUA}"
+  else
+    echo "  [=] Media Equalizer keybinding already present in ${BINDINGS_LUA}"
   fi
 fi
 

@@ -1,0 +1,14 @@
+[Unit]
+Description=EasyEffects Audio Effects Service
+Wants=pipewire-pulse.service
+After=pipewire-pulse.service
+PartOf=pipewire-pulse.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/easyeffects --service-mode
+Restart=always
+RestartSec=3s
+
+[Install]
+WantedBy=default.target

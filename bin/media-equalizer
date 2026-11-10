@@ -1,0 +1,411 @@
+#!/usr/bin/env python3
+"""
+Media-Aware Audio Equalizer & Sound Enhancer for Omarchy / PipeWire
+Automatically switches EasyEffects DSP presets depending on what media
+is currently playing and what audio output device is active.
+"""
+
+import sys
+import os
+import json
+import re
+import time
+import subprocess
+import argparse
+from typing import Optional, Dict, Any, Tuple
+
+CONFIG_DIR = os.path.expanduser("~/.config/omarchy/equalizer")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+STATE_FILE = os.path.join(CONFIG_DIR, "state.json")
+os.makedirs(CONFIG_DIR, exist_ok=True)
+
+MODES = ["auto", "music", "movie", "tv", "podcast", "audiobook", "bypass"]
+
+MODE_LABELS = {
+    "auto": "Auto (Dynamic)",
+    "music": "Music (Harman)",
+    "movie": "Movie (Theatre)",
+    "tv": "TV Show",
+    "podcast": "Podcast",
+    "audiobook": "Audiobook",
+    "bypass": "Off (Bypass)"
+}
+
+def load_config() -> Dict[str, Any]:
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"mode": "auto"}
+
+def save_config(cfg: Dict[str, Any]):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    temp_file = CONFIG_FILE + ".tmp"
+    with open(temp_file, "w") as f:
+        json.dump(cfg, f, indent=2)
+    os.replace(temp_file, CONFIG_FILE)
+
+def write_state(state: Dict[str, Any]):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    temp_file = STATE_FILE + ".tmp"
+    with open(temp_file, "w") as f:
+        json.dump(state, f, indent=2)
+    os.replace(temp_file, STATE_FILE)
+
+def ensure_easyeffects_running():
+    res = subprocess.run(["systemctl", "--user", "is-active", "easyeffects.service"], stdout=subprocess.DEVNULL)
+    if res.returncode != 0:
+        subprocess.run(["systemctl", "--user", "start", "easyeffects.service"], stdout=subprocess.DEVNULL)
+        time.sleep(1.0)
+
+def get_active_sink_info() -> Tuple[str, str]:
+    """Returns (device_type: 'headphones' | 'speakers', device_name: str)"""
+    try:
+        out = subprocess.check_output(["wpctl", "status"], text=True, stderr=subprocess.DEVNULL)
+        lines = out.splitlines()
+        in_sinks = False
+        default_sink = ""
+        for line in lines:
+            if "Sinks:" in line:
+                in_sinks = True
+                continue
+            if in_sinks:
+                if line.strip() == "" or "Sources:" in line or "Filters:" in line:
+                    break
+                if "*" in line:
+                    # e.g. " │  *   44. Starship/Matisse HD Audio Controller Analog Stereo [vol: 0.55]"
+                    # or   " │  *   46. MH752 Analog Stereo                 [vol: 0.45]"
+                    parts = line.split("*", 1)[1].strip()
+                    # Remove leading id like "44. "
+                    parts = re.sub(r"^\d+\.\s*", "", parts)
+                    # Remove trailing bracket like "[vol: 0.55]"
+                    parts = re.sub(r"\[.*\]", "", parts).strip()
+                    default_sink = parts
+                    break
+        
+        lower = default_sink.lower()
+        is_hp = any(k in lower for k in [
+            "headphone", "headset", "earphone", "earbud", "airpod",
+            "mh752", "iem", "wh-1000", "qc35", "qc45", "hd560", "hd600", "dt770", "dt990"
+        ])
+        dev_type = "headphones" if is_hp else "speakers"
+        return dev_type, default_sink or "Default Output"
+    except Exception:
+        return "speakers", "Default Output"
+
+def get_mpris_players() -> list:
+    """Introspects MPRIS D-Bus players and returns a list of player dicts."""
+    players = []
+    try:
+        import dbus
+        bus = dbus.SessionBus()
+        for name in bus.list_names():
+            if not name.startswith("org.mpris.MediaPlayer2."):
+                continue
+            try:
+                obj = bus.get_object(name, "/org/mpris/MediaPlayer2")
+                props = dbus.Interface(obj, "org.freedesktop.DBus.Properties")
+                
+                status = str(props.Get("org.mpris.MediaPlayer2.Player", "PlaybackStatus", dbus_interface="org.freedesktop.DBus.Properties"))
+                meta_dbus = props.Get("org.mpris.MediaPlayer2.Player", "Metadata", dbus_interface="org.freedesktop.DBus.Properties")
+                
+                # Try getting Identity
+                identity = ""
+                try:
+                    identity = str(props.Get("org.mpris.MediaPlayer2", "Identity", dbus_interface="org.freedesktop.DBus.Properties"))
+                except Exception:
+                    identity = name.replace("org.mpris.MediaPlayer2.", "").split(".")[0]
+
+                meta = {}
+                for k, v in meta_dbus.items():
+                    k_str = str(k)
+                    if isinstance(v, (list, dbus.Array)):
+                        meta[k_str] = [str(x) for x in v]
+                    else:
+                        meta[k_str] = str(v)
+                
+                title = meta.get("xesam:title", "")
+                url = meta.get("xesam:url", "")
+                album = meta.get("xesam:album", "")
+                artists = meta.get("xesam:artist", [])
+                artist = ", ".join(artists) if isinstance(artists, list) else str(artists)
+                trackid = meta.get("mpris:trackid", "")
+                
+                length = 0
+                try:
+                    length = int(meta_dbus.get("mpris:length", 0)) / 1_000_000 # seconds
+                except Exception:
+                    pass
+
+                players.append({
+                    "bus_name": name,
+                    "identity": identity,
+                    "status": status,
+                    "title": title,
+                    "artist": artist,
+                    "album": album,
+                    "url": url,
+                    "trackid": trackid,
+                    "length": length
+                })
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return players
+
+def classify_media(players: list) -> Tuple[str, str, Dict[str, Any]]:
+    """
+    Returns (category: str, reason: str, active_player: dict)
+    Categories: 'music', 'movie', 'tv', 'podcast', 'audiobook', 'default'
+    """
+    if not players:
+        return "default", "No media players detected", {}
+
+    # Prefer 'Playing' players over 'Paused'
+    playing_players = [p for p in players if p.get("status") == "Playing"]
+    candidate_list = playing_players if playing_players else players
+    
+    # Pick candidate with non-empty title or url
+    p = None
+    for cand in candidate_list:
+        if cand.get("title") or cand.get("url"):
+            p = cand
+            break
+    if not p:
+        p = candidate_list[0]
+
+    identity = p.get("identity", "").lower()
+    title = p.get("title", "")
+    title_lower = title.lower()
+    url = p.get("url", "").lower()
+    album = p.get("album", "").lower()
+    artist = p.get("artist", "").lower()
+    trackid = p.get("trackid", "")
+    length = p.get("length", 0)
+
+    # 1. Audiobook checks
+    audiobook_terms = ["audiobook", "audio book", "chapter ", "ch. ", "narrated by", "unabridged", "audible"]
+    if any(k in identity for k in ["audible", "audiobookshelf", "cozy", "bookworm"]):
+        return "audiobook", f"Dedicated audiobook player ({p.get('identity')})", p
+    if any(k in url for k in ["audible.com", "audiobooks.com", "storytel.com", "librivox.org"]):
+        return "audiobook", "Audiobook streaming URL", p
+    if any(t in title_lower or t in album for t in audiobook_terms):
+        return "audiobook", f"Audiobook title marker in '{title}'", p
+
+    # 2. Podcast checks
+    podcast_terms = ["podcast", "episode ", "ep. ", "ep ", "talk show", "interview"]
+    if trackid.startswith("spotify:episode:") or "open.spotify.com/episode" in url:
+        return "podcast", f"Spotify podcast episode ({title})", p
+    if any(k in identity for k in ["antennapod", "gpodder", "kasts", "pocket casts", "castbox"]):
+        return "podcast", f"Podcast player ({p.get('identity')})", p
+    if any(k in url for k in ["podcasts.google", "podcasts.apple", "overcast.fm"]):
+        return "podcast", "Podcast streaming URL", p
+    if any(t in title_lower or t in album for t in podcast_terms):
+        # Disambiguate between TV show episode and Podcast episode
+        tv_patterns = [r"\bs\d+[\s._-]*e\d+\b", r"\bseason\s*\d+"]
+        if not any(re.search(pat, title_lower) for pat in tv_patterns):
+            if "podcast" in title_lower or "podcast" in album or "podcast" in artist:
+                return "podcast", f"Podcast marker in '{title}'", p
+
+    # 3. TV Show checks
+    tv_ep_patterns = [
+        r"\b[sS]\d+[\s._-]*[eE]\d+\b",
+        r"\bseason\s*\d+",
+        r"\bseries\s*\d+",
+        r"\bpart\s*\d+",
+        r"\bepisode\s*\d+",
+        r"\bep\.\s*\d+"
+    ]
+    is_tv_title = any(re.search(pat, title, re.IGNORECASE) for pat in tv_ep_patterns)
+    is_streaming_service = any(k in url for k in [
+        "netflix.com/watch", "crunchyroll.com/watch", "disneyplus.com",
+        "primevideo.com", "hulu.com", "hbomax.com", "max.com"
+    ]) or "netflix" in title_lower
+
+    if is_streaming_service:
+        # If length is between 15 mins (900s) and 65 mins (3900s), or has TV patterns -> TV show
+        if is_tv_title or (900 <= length <= 3900):
+            return "tv", f"Streaming TV episode ({title or 'Stream'} - {int(length/60)}m)", p
+        elif length > 3900:
+            return "movie", f"Streaming feature movie ({title or 'Stream'} - {int(length/60)}m)", p
+
+    if is_tv_title:
+        return "tv", f"TV series episode pattern in '{title}'", p
+
+    # 4. Movie checks
+    movie_indicators = ["1080p", "2160p", "4k", "bluray", "web-dl", "remux", "x264", "x265", "hevc"]
+    if any(ind in title_lower for ind in movie_indicators):
+        return "movie", f"Movie video file tags in '{title}'", p
+    if length > 3900 and any(k in identity for k in ["vlc", "mpv", "plex", "jellyfin", "stremio"]):
+        return "movie", f"Feature-length video in {p.get('identity')} ({int(length/60)}m)", p
+
+    # 5. Music checks
+    if trackid.startswith("spotify:track:") or "open.spotify.com/track" in url:
+        return "music", f"Spotify music track ({title})", p
+    if any(k in identity for k in ["spotify", "amberol", "rhythmbox", "lollypop", "strawberry", "cider", "audacious", "apple music", "tidal"]):
+        return "music", f"Music player ({p.get('identity')}: {title})", p
+    if any(k in url for k in ["music.youtube.com", "soundcloud.com", "bandcamp.com"]):
+        return "music", "Music streaming platform URL", p
+    if length > 0 and length < 900 and (p.get("artist") or p.get("album")):
+        return "music", f"Music track with artist metadata ({title})", p
+
+    # Fallback to default
+    if p.get("status") == "Playing":
+        return "music", f"Active audio stream playback ({title or p.get('identity')})", p
+    
+    return "default", "Media paused or generic audio", p
+
+def resolve_preset(mode: str, category: str, device_type: str) -> str:
+    """Determines the exact EasyEffects preset name to load."""
+    effective_category = category if mode == "auto" else mode
+
+    if effective_category == "bypass" or effective_category == "default":
+        return "omarchy-bypass"
+    elif effective_category == "music":
+        return f"omarchy-music-{device_type}"
+    elif effective_category == "movie":
+        return f"omarchy-movie-{device_type}"
+    elif effective_category == "tv":
+        return "omarchy-tv"
+    elif effective_category == "podcast":
+        return "omarchy-podcast"
+    elif effective_category == "audiobook":
+        return "omarchy-audiobook"
+    else:
+        return "omarchy-bypass"
+
+class EqualizerManager:
+    def __init__(self):
+        self.config = load_config()
+        self.current_preset = ""
+        self.last_state = {}
+
+    def update_once(self) -> Dict[str, Any]:
+        self.config = load_config()
+        mode = self.config.get("mode", "auto")
+        device_type, device_name = get_active_sink_info()
+        players = get_mpris_players()
+        category, reason, active_player = classify_media(players)
+        
+        target_preset = resolve_preset(mode, category, device_type)
+        
+        # Apply preset if changed
+        if target_preset != self.current_preset:
+            ensure_easyeffects_running()
+            subprocess.run(["easyeffects", "-l", target_preset], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.current_preset = target_preset
+
+        state = {
+            "mode": mode,
+            "mode_label": MODE_LABELS.get(mode, mode.title()),
+            "detected_category": category,
+            "device_type": device_type,
+            "device_name": device_name,
+            "active_preset": target_preset,
+            "player": active_player.get("identity", ""),
+            "title": active_player.get("title", ""),
+            "artist": active_player.get("artist", ""),
+            "reason": reason,
+            "updated_at": int(time.time())
+        }
+        self.last_state = state
+        write_state(state)
+        return state
+
+    def set_mode(self, mode: str):
+        if mode not in MODES:
+            print(f"Error: Unknown mode '{mode}'. Valid modes: {', '.join(MODES)}", file=sys.stderr)
+            sys.exit(1)
+        self.config["mode"] = mode
+        save_config(self.config)
+        state = self.update_once()
+        print(f"Equalizer set to: {state['mode_label']} -> Loaded preset: {state['active_preset']}")
+        # Desktop notification
+        icon = "audio-headphones" if state["device_type"] == "headphones" else "audio-speakers"
+        msg = f"Preset: {state['active_preset']}\nDevice: {state['device_name']}"
+        subprocess.run(["notify-send", "-a", "Media Equalizer", "-i", icon, f"Equalizer: {state['mode_label']}", msg], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def cycle_next(self):
+        curr = self.config.get("mode", "auto")
+        idx = MODES.index(curr) if curr in MODES else 0
+        nxt = MODES[(idx + 1) % len(MODES)]
+        self.set_mode(nxt)
+
+    def run_daemon(self):
+        print("Starting Media-Aware Equalizer Daemon...")
+        ensure_easyeffects_running()
+        self.update_once()
+
+        # Connect to D-Bus signal listener if possible
+        try:
+            from gi.repository import GLib
+            import dbus
+            from dbus.mainloop.glib import DBusGMainLoop
+
+            DBusGMainLoop(set_as_default=True)
+            bus = dbus.SessionBus()
+
+            def on_prop_changed(*args, **kwargs):
+                self.update_once()
+
+            # Subscribe to MPRIS PropertiesChanged
+            bus.add_signal_receiver(
+                on_prop_changed,
+                signal_name="PropertiesChanged",
+                dbus_interface="org.freedesktop.DBus.Properties",
+                path="/org/mpris/MediaPlayer2"
+            )
+
+            # Polling fallback timer every 3 seconds for sink changes and non-D-Bus streams
+            GLib.timeout_add_seconds(3, lambda: (self.update_once(), True)[1])
+
+            loop = GLib.MainLoop()
+            loop.run()
+        except Exception as e:
+            print(f"D-Bus signal loop fallback to polling: {e}")
+            while True:
+                try:
+                    self.update_once()
+                except Exception as ex:
+                    print(f"Update error: {ex}")
+                time.sleep(3.0)
+
+def main():
+    parser = argparse.ArgumentParser(description="Media-Aware Audio Equalizer for Omarchy")
+    subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
+
+    subparsers.add_parser("status", help="Print current equalizer status")
+    subparsers.add_parser("auto", help="Set equalizer mode to Auto")
+    subparsers.add_parser("next", help="Cycle to next equalizer mode")
+    subparsers.add_parser("daemon", help="Run background watcher daemon")
+
+    set_parser = subparsers.add_parser("set", help="Set specific equalizer mode")
+    set_parser.add_argument("mode", choices=MODES, help="Mode to set")
+
+    args = parser.parse_args()
+    mgr = EqualizerManager()
+
+    if args.command == "status" or not args.command:
+        state = mgr.update_once()
+        print(f"--- Media Equalizer Status ---")
+        print(f"Mode:            {state['mode_label']} ({state['mode']})")
+        print(f"Active Preset:   {state['active_preset']}")
+        print(f"Output Device:   {state['device_type'].title()} ({state['device_name']})")
+        print(f"Detected Media:  {state['detected_category'].title()}")
+        if state['player'] or state['title']:
+            print(f"Player / Title:  {state['player']} - {state['title']}")
+        print(f"Reason:          {state['reason']}")
+    elif args.command == "auto":
+        mgr.set_mode("auto")
+    elif args.command == "set":
+        mgr.set_mode(args.mode)
+    elif args.command == "next":
+        mgr.cycle_next()
+    elif args.command == "daemon":
+        mgr.run_daemon()
+
+if __name__ == "__main__":
+    main()

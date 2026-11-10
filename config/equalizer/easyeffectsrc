@@ -1,0 +1,7 @@
+[Window]
+height=1030
+width=922
+showTrayIcon=false
+show_tray_icon=false
+noWindowAfterStarting=true
+enableServiceMode=true

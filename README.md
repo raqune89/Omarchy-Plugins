@@ -17,10 +17,13 @@ cd Omarchy-Plugins
 ### What `./install.sh` Does:
 1. Installs all **10 custom menu bar tools** and **13 CAD-styled core bar widgets** into `~/.config/omarchy/plugins/`.
 2. Installs the formatting-aware **`selective-reading`** F5-TTS + RVC v2 GPU celebrity voice CLI to `~/.local/bin/selective-reading` and caches the local **Morgan Freeman**, **Stephen Fry**, **Matthew McConaughey**, and **Shayne Topp** voice models.
-3. Installs the **`20-sync-cad-icons`** theme hook to `~/.config/omarchy/hooks/theme-set.d/20-sync-cad-icons`.
-4. Restores `~/.config/omarchy/shell.json` so every icon remains in its exact bar section and order (`left`, `centerBegin`, `center`, `centerEnd`, `right`).
-5. Configures the **`SUPER + SHIFT + R`** (start/stop) and **`SUPER + R`** (pause/resume) global shortcuts in `~/.config/hypr/bindings.lua` for **Selective Reading**.
-6. Immediately executes `20-sync-cad-icons` to render all `*.svg.tpl` icons using the active theme's color palette (`~/.local/state/omarchy/current/theme/colors.toml`), and hot-reloads `omarchy-shell` and Hyprland.
+3. Installs the media-aware **`media-equalizer`** CLI to `~/.local/bin/media-equalizer`, installs high-fidelity EasyEffects presets, and enables the `easyeffects.service` and `omarchy-media-equalizer.service` background daemons.
+4. Installs the **`20-sync-cad-icons`** theme hook to `~/.config/omarchy/hooks/theme-set.d/20-sync-cad-icons`.
+5. Restores `~/.config/omarchy/shell.json` so every icon remains in its exact bar section and order (`left`, `centerBegin`, `center`, `centerEnd`, `right`).
+6. Configures global shortcuts in `~/.config/hypr/bindings.lua`:
+   - **`SUPER + SHIFT + R`** (start/stop) and **`SUPER + R`** (pause/resume) for **Selective Reading**.
+   - **`SUPER + ALT + E`** to cycle **Media Equalizer** modes on the fly.
+7. Immediately executes `20-sync-cad-icons` to render all `*.svg.tpl` icons using the active theme's color palette (`~/.local/state/omarchy/current/theme/colors.toml`), and hot-reloads `omarchy-shell` and Hyprland.
 
 ---
 

@@ -1,0 +1,14 @@
+[Unit]
+Description=Omarchy Media-Aware Audio Equalizer Daemon
+Wants=easyeffects.service
+After=easyeffects.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/home/raqune/.local/bin/media-equalizer daemon
+Restart=always
+RestartSec=3s
+
+[Install]
+WantedBy=default.target

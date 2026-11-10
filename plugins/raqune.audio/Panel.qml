@@ -602,12 +602,55 @@ Panel {
     }
   }
 
+  property var eqState: ({
+    mode: "auto",
+    mode_label: "Auto (Dynamic)",
+    detected_category: "default",
+    device_type: "speakers",
+    device_name: "Default Output",
+    active_preset: "omarchy-bypass",
+    player: "",
+    title: "",
+    reason: ""
+  })
+
+  Process {
+    id: eqStateProc
+    command: ["cat", "/home/raqune/.config/omarchy/equalizer/state.json"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: function() {
+        try {
+          if (text && text.trim().length > 0) {
+            root.eqState = JSON.parse(text)
+          }
+        } catch (e) {}
+      }
+    }
+  }
+
+  Process {
+    id: eqSetProc
+    command: ["/home/raqune/.local/bin/media-equalizer", "auto"]
+    onExited: function() {
+      eqStateProc.running = true
+    }
+  }
+
+  function setEqMode(mode) {
+    eqSetProc.command = ["/home/raqune/.local/bin/media-equalizer", "set", mode]
+    eqSetProc.running = true
+  }
+
   Timer {
-    interval: 5000
+    interval: 3000
     running: root.opened
     repeat: true
     triggeredOnStart: true
-    onTriggered: if (!sinkAvailabilityProc.running) sinkAvailabilityProc.running = true
+    onTriggered: {
+      if (!sinkAvailabilityProc.running) sinkAvailabilityProc.running = true
+      if (!eqStateProc.running) eqStateProc.running = true
+    }
   }
 
   // Runs whether or not the panel is open: the bar shows and scrolls the output
@@ -867,6 +910,167 @@ Panel {
                 width: panelColumn.width
                 node: modelData
                 rowIndex: index
+              }
+            }
+          }
+
+          // ---- Equalizer ----
+          PanelSeparator {
+            foreground: root.bar.foreground
+          }
+
+          Column {
+            width: parent.width
+            spacing: Style.space(8)
+
+            Item {
+              width: parent.width
+              implicitHeight: Math.max(eqHeader.implicitHeight, eqStatus.implicitHeight)
+
+              PanelSectionHeader {
+                id: eqHeader
+                text: "EQUALIZER"
+                foreground: root.bar.foreground
+                fontFamily: root.bar.fontFamily
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              Text {
+                id: eqStatus
+                textFormat: Text.PlainText
+                text: (root.eqState.device_type === "headphones" ? "󰋋 " : "󰓃 ") +
+                      (root.eqState.mode === "auto" ? ("Auto: " + (root.eqState.detected_category ? root.eqState.detected_category.toUpperCase() : "AUTO")) : (root.eqState.mode_label || root.eqState.mode))
+                color: Commons.Color.accent
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                elide: Text.ElideRight
+                clip: true
+                width: parent.width - eqHeader.implicitWidth - Style.space(12)
+                horizontalAlignment: Text.AlignRight
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+              }
+            }
+
+            // Mode Selector Row 1: Auto, Music, Movie, TV (4 chips)
+            Row {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Repeater {
+                model: [
+                  { key: "auto", label: "Auto" },
+                  { key: "music", label: "Music" },
+                  { key: "movie", label: "Movie" },
+                  { key: "tv", label: "TV" }
+                ]
+
+                Rectangle {
+                  required property var modelData
+                  width: Math.floor((parent.width - Style.space(18)) / 4)
+                  height: Style.space(26)
+                  radius: Style.cornerRadius
+                  property bool isActive: (root.eqState.mode === modelData.key)
+                  property bool isHovered: false
+
+                  color: isActive ? Commons.Color.accent : (isHovered ? root.hoverFill : "transparent")
+                  border.color: isActive ? Commons.Color.accent : Qt.darker(root.bar.foreground, 2.2)
+                  border.width: 1
+
+                  Text {
+                    anchors.centerIn: parent
+                    width: parent.width - Style.space(6)
+                    horizontalAlignment: Text.AlignHCenter
+                    textFormat: Text.PlainText
+                    text: parent.modelData.label
+                    font.family: root.bar.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: parent.isActive
+                    color: parent.isActive ? (Commons.Color.accentForeground || "#ffffff") : root.bar.foreground
+                    elide: Text.ElideRight
+                    clip: true
+                  }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered: parent.isHovered = true
+                    onExited: parent.isHovered = false
+                    onClicked: root.setEqMode(parent.modelData.key)
+                  }
+                }
+              }
+            }
+
+            // Mode Selector Row 2: Podcast, Audiobook, Off (3 chips)
+            Row {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Repeater {
+                model: [
+                  { key: "podcast", label: "Podcast" },
+                  { key: "audiobook", label: "Audiobook" },
+                  { key: "bypass", label: "Off" }
+                ]
+
+                Rectangle {
+                  required property var modelData
+                  width: Math.floor((parent.width - Style.space(12)) / 3)
+                  height: Style.space(26)
+                  radius: Style.cornerRadius
+                  property bool isActive: (root.eqState.mode === modelData.key)
+                  property bool isHovered: false
+
+                  color: isActive ? Commons.Color.accent : (isHovered ? root.hoverFill : "transparent")
+                  border.color: isActive ? Commons.Color.accent : Qt.darker(root.bar.foreground, 2.2)
+                  border.width: 1
+
+                  Text {
+                    anchors.centerIn: parent
+                    width: parent.width - Style.space(6)
+                    horizontalAlignment: Text.AlignHCenter
+                    textFormat: Text.PlainText
+                    text: parent.modelData.label
+                    font.family: root.bar.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: parent.isActive
+                    color: parent.isActive ? (Commons.Color.accentForeground || "#ffffff") : root.bar.foreground
+                    elide: Text.ElideRight
+                    clip: true
+                  }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered: parent.isHovered = true
+                    onExited: parent.isHovered = false
+                    onClicked: root.setEqMode(parent.modelData.key)
+                  }
+                }
+              }
+            }
+
+            // Live media detection / reason badge
+            Item {
+              width: parent.width
+              height: reasonText.implicitHeight > 0 ? reasonText.implicitHeight : Style.space(16)
+              visible: (root.eqState.reason && root.eqState.reason.length > 0) ? true : false
+
+              Text {
+                id: reasonText
+                width: parent.width
+                textFormat: Text.PlainText
+                text: (root.eqState.player ? (root.eqState.player + ": ") : "") + (root.eqState.reason || "")
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.caption
+                color: Qt.darker(root.bar.foreground, 1.8)
+                elide: Text.ElideRight
+                clip: true
               }
             }
           }
