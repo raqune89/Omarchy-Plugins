@@ -1,7 +1,7 @@
 [Unit]
 Description=Omarchy Media-Aware Audio Equalizer Daemon
 Wants=easyeffects.service
-After=easyeffects.service
+After=graphical-session.target easyeffects.service
 PartOf=graphical-session.target
 
 [Service]
@@ -11,4 +11,4 @@ Restart=always
 RestartSec=3s
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target

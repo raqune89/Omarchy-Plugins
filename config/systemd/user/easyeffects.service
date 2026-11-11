@@ -1,8 +1,8 @@
 [Unit]
 Description=EasyEffects Audio Effects Service
 Wants=pipewire-pulse.service
-After=pipewire-pulse.service
-PartOf=pipewire-pulse.service
+After=graphical-session.target pipewire-pulse.service
+PartOf=graphical-session.target
 
 [Service]
 Type=simple
@@ -11,4 +11,4 @@ Restart=always
 RestartSec=3s
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target

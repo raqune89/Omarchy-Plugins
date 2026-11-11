@@ -60,6 +60,27 @@ def ensure_easyeffects_running():
         subprocess.run(["systemctl", "--user", "start", "easyeffects.service"], stdout=subprocess.DEVNULL)
         time.sleep(1.0)
 
+def get_easyeffects_env() -> Dict[str, str]:
+    """Ensures display variables or fallback offscreen QPA platform are set to prevent Qt fatal aborts."""
+    env = os.environ.copy()
+    if "WAYLAND_DISPLAY" not in env and "DISPLAY" not in env:
+        try:
+            out = subprocess.check_output(
+                ["systemctl", "--user", "show-environment"],
+                text=True,
+                stderr=subprocess.DEVNULL
+            )
+            for line in out.splitlines():
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    if k in ("WAYLAND_DISPLAY", "DISPLAY", "XDG_RUNTIME_DIR", "XDG_CURRENT_DESKTOP"):
+                        env[k] = v
+        except Exception:
+            pass
+    if "WAYLAND_DISPLAY" not in env and "DISPLAY" not in env:
+        env["QT_QPA_PLATFORM"] = "offscreen"
+    return env
+
 def get_active_sink_info() -> Tuple[str, str]:
     """Returns (device_type: 'headphones' | 'speakers', device_name: str)"""
     try:
@@ -295,7 +316,12 @@ class EqualizerManager:
         # Apply preset if changed
         if target_preset != self.current_preset:
             ensure_easyeffects_running()
-            subprocess.run(["easyeffects", "-l", target_preset], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["easyeffects", "-l", target_preset],
+                env=get_easyeffects_env(),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
             self.current_preset = target_preset
 
         state = {
