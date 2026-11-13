@@ -54,11 +54,28 @@ def write_state(state: Dict[str, Any]):
         json.dump(state, f, indent=2)
     os.replace(temp_file, STATE_FILE)
 
-def ensure_easyeffects_running():
+def ensure_easyeffects_running(max_wait_sec: float = 6.0) -> bool:
+    """Ensures easyeffects.service is running and responsive before sending commands."""
     res = subprocess.run(["systemctl", "--user", "is-active", "easyeffects.service"], stdout=subprocess.DEVNULL)
     if res.returncode != 0:
         subprocess.run(["systemctl", "--user", "start", "easyeffects.service"], stdout=subprocess.DEVNULL)
-        time.sleep(1.0)
+
+    # Wait until easyeffects service is actually responding to IPC
+    start_time = time.time()
+    while time.time() - start_time < max_wait_sec:
+        try:
+            check = subprocess.run(
+                ["easyeffects", "-s"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=1.0
+            )
+            if check.returncode == 0:
+                return True
+        except Exception:
+            pass
+        time.sleep(0.3)
+    return False
 
 def get_easyeffects_env() -> Dict[str, str]:
     """Ensures display variables or fallback offscreen QPA platform are set to prevent Qt fatal aborts."""
@@ -315,14 +332,18 @@ class EqualizerManager:
         
         # Apply preset if changed
         if target_preset != self.current_preset:
-            ensure_easyeffects_running()
-            subprocess.run(
-                ["easyeffects", "-l", target_preset],
-                env=get_easyeffects_env(),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            self.current_preset = target_preset
+            if ensure_easyeffects_running():
+                try:
+                    subprocess.run(
+                        ["easyeffects", "-w", "-l", target_preset],
+                        env=get_easyeffects_env(),
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=3.0
+                    )
+                    self.current_preset = target_preset
+                except Exception:
+                    pass
 
         state = {
             "mode": mode,

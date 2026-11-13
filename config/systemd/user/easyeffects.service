@@ -7,7 +7,7 @@ PartOf=graphical-session.target
 [Service]
 Type=simple
 ExecStart=/usr/bin/easyeffects --service-mode
-Restart=always
+Restart=on-failure
 RestartSec=3s
 
 [Install]

@@ -7,7 +7,7 @@ PartOf=graphical-session.target
 [Service]
 Type=simple
 ExecStart=/home/raqune/.local/bin/media-equalizer daemon
-Restart=always
+Restart=on-failure
 RestartSec=3s
 
 [Install]
