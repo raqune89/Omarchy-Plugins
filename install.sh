@@ -18,11 +18,11 @@ echo "  [+] Installed $(ls -1d "${REPO_DIR}/plugins/"* | wc -l) plugins to ${PLU
 # 2. Install helper CLI scripts & pre-cache F5-TTS + RVC v2 GPU celebrity voice models
 mkdir -p "${BIN_DEST}"
 mkdir -p "${HOME}/.local/share/omarchy/selective-reading/voices"
-cp -f "${REPO_DIR}/plugins/raqune.selective-reading/voices/"*_ref.wav "${HOME}/.local/share/omarchy/selective-reading/voices/" 2>/dev/null || true
+cp -f "${REPO_DIR}/plugins/raqune.selective-reading/voices/"*.wav "${HOME}/.local/share/omarchy/selective-reading/voices/" 2>/dev/null || true
 cp -f "${REPO_DIR}/bin/selective-reading" "${BIN_DEST}/selective-reading"
 chmod +x "${BIN_DEST}/selective-reading"
 echo "  [+] Installed selective-reading CLI to ${BIN_DEST}/selective-reading"
-echo "  [*] Ensuring F5-TTS + RVC v2 celebrity voice models (Morgan Freeman, Stephen Fry & Matthew McConaughey) are cached..."
+echo "  [*] Ensuring F5-TTS Smosh cast voice models (Shayne Topp, Angela Giarratana, Amanda Lehan-Canto) are cached..."
 "${BIN_DEST}/selective-reading" setup || true
 
 # 2b. Install Media Equalizer CLI, presets, and background services

@@ -16,26 +16,15 @@ Panel {
 
   property bool isPlaying: false
   property bool isPaused: false
-  property string currentVoice: "morgan_freeman"
-  property string currentVoiceName: "Morgan Freeman"
-  property string currentRate: "+0%"
+  property string currentVoice: "shayne_topp"
+  property string currentVoiceName: "Shayne Topp"
   property int currentVolume: 100
   property string lastSnippet: ""
 
   readonly property var voices: [
-    { id: "morgan_freeman", name: "Morgan Freeman", desc: "Deep, Iconic Narrator (US M)" },
-    { id: "stephen_fry", name: "Stephen Fry", desc: "Warm, Classic Audiobook (UK M)" },
-    { id: "matthew_mcconaughey", name: "Matthew McConaughey", desc: "Smooth, Laid-Back Drawl (US M)" },
     { id: "shayne_topp", name: "Shayne Topp", desc: "Adaptive Energy (US M)" },
-    { id: "shayne_topp_calm", name: "Shayne Topp (Calm)", desc: "Warm, Chill Narrative (US M)" },
-    { id: "shayne_topp_hype", name: "Shayne Topp (Hype)", desc: "Boisterous, Animated (US M)" }
-  ]
-
-  readonly property var rates: [
-    { id: "-15%", label: "0.85x" },
-    { id: "+0%", label: "1.0x" },
-    { id: "+15%", label: "1.15x" },
-    { id: "+30%", label: "1.3x" }
+    { id: "angela_giarratana", name: "Angela Giarratana", desc: "Bright & Expressive (US F)" },
+    { id: "amanda_lehan_canto", name: "Amanda Lehan-Canto", desc: "Warm Storyteller (US F)" }
   ]
 
   readonly property var volumes: [
@@ -62,7 +51,6 @@ Panel {
         root.isPaused = Boolean(data.isPaused)
         if (data.voice) root.currentVoice = String(data.voice)
         if (data.voiceName) root.currentVoiceName = String(data.voiceName)
-        if (data.rate) root.currentRate = String(data.rate)
         if (data.volume !== undefined) root.currentVolume = Math.round(Number(data.volume))
         if (data.textSnippet !== undefined) root.lastSnippet = String(data.textSnippet)
       } catch (e) {}
@@ -78,11 +66,6 @@ Panel {
 
   function previewVoice(voiceId) {
     Util.execArgv([root.cliPath, "preview", voiceId])
-  }
-
-  function selectRate(rateStr) {
-    root.currentRate = rateStr
-    Util.execArgv([root.cliPath, "set-rate", rateStr])
   }
 
   function setVolume(vol) {
@@ -160,7 +143,7 @@ Panel {
           meta: root.isPlaying
             ? ((root.isPaused ? "PAUSED • " : "SPEAKING • ") + root.neutralizeMarkup(root.currentVoiceName).toUpperCase())
             : ("VOICE: " + root.neutralizeMarkup(root.currentVoiceName).toUpperCase() + " • SUPER+SHIFT+R")
-          detail: root.isPlaying ? (root.isPaused ? "PAUSED" : "LIVE") : root.neutralizeMarkup(root.currentRate)
+          detail: root.isPlaying ? (root.isPaused ? "PAUSED" : "LIVE") : "READY"
           foreground: Commons.Color.foreground
           iconComponent: Component {
             Image {
@@ -237,29 +220,6 @@ Panel {
                 bordered: true
                 onClicked: root.previewVoice(modelData.id)
               }
-            }
-          }
-        }
-
-        PanelSeparator { foreground: Commons.Color.foreground }
-
-        PanelSectionHeader {
-          text: "SPEECH SPEED"
-          foreground: Commons.Color.foreground
-        }
-
-        Row {
-          width: parent.width
-          spacing: Style.space(6)
-
-          Repeater {
-            model: root.rates
-            delegate: Button {
-              width: Math.floor((column.width - Style.space(18)) / 4)
-              text: modelData.label
-              bordered: true
-              selected: root.currentRate === modelData.id
-              onClicked: root.selectRate(modelData.id)
             }
           }
         }

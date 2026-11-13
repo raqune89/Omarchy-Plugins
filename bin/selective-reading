@@ -35,92 +35,50 @@ DAEMON_SOCKET = Path("/tmp/selective-reading-daemon.sock")
 MPV_IPC_SOCKET = Path("/tmp/selective-reading-mpv.sock")
 
 VOICES = {
-    "morgan_freeman": {
-        "name": "Morgan Freeman",
-        "desc": "Deep, Iconic Narrator (US Male)",
-        "lang": "en-us",
-        "ref_wav": "morgan_freeman_ref.wav",
-        "ref_text": "I'm giving you the finest voice in the land, but that doesn't come cheap, homie. If you want the velvet, you got to bring the silver. ",
-        "base_speed": 0.90,
-        "nfe_step": 32,
-        "f0_up_key": 0,
-        "index_rate": 0.45,
-        "protect": 0.45,
-        "hf_repo": "Supanovah/MorganFreeman",
-        "hf_zip": "MorganFreeman_e440_s4840.zip",
-        "pth_name": "MorganFreeman_e440_s4840.pth",
-        "index_name": "added_IVF740_Flat_nprobe_1_MorganFreeman_v2.index",
-    },
-    "stephen_fry": {
-        "name": "Stephen Fry",
-        "desc": "Warm, Classic Audiobook (UK Male)",
-        "lang": "en-gb",
-        "ref_wav": "stephen_fry_ref.wav",
-        "ref_text": "Hello, I'm Stephen Fry, and my narrations of Harry Potter books one to seven are now available to listeners in the US and Canada. ",
-        "base_speed": 0.92,
-        "nfe_step": 32,
-        "f0_up_key": 0,
-        "index_rate": 0.45,
-        "protect": 0.45,
-        "hf_repo": "imbetter/stephenfry64",
-        "hf_zip": "StephenFry64.zip",
-        "pth_name": "StephenFry64.pth",
-        "index_name": "added_IVF553_Flat_nprobe_1_StephenFry64_v2.index",
-    },
-    "matthew_mcconaughey": {
-        "name": "Matthew McConaughey",
-        "desc": "Smooth, Laid-Back Drawl (US Male)",
-        "lang": "en-us",
-        "ref_wav": "matthew_mcconaughey_ref.wav",
-        "ref_text": "Yeah, I was catching green lights. Never the too cool for school guy who leans against the wall and smokes a cigarette at the party. No, I was the guy who danced at the party. ",
-        "base_speed": 0.78,
-        "nfe_step": 32,
-        "f0_up_key": 0,
-        "index_rate": 0.25,
-        "protect": 0.40,
-        "hf_repo": "RoyalAce/matthew_mcconaughey_rvc_v2_48k_1.05k_epoch",
-        "hf_zip": "matthew_mcconaughey.7z",
-        "pth_name": "matthew_mcconaughey_e1050_s40950.pth",
-        "index_name": "added_IVF578_Flat_nprobe_1_matthew_mcconaughey_v2.index",
-    },
     "shayne_topp": {
         "name": "Shayne Topp",
         "desc": "Context-Adaptive Energy (US Male)",
         "lang": "en-us",
         "ref_wav": "shayne_topp_calm_ref.wav",
-        "ref_text": "And it was interesting because it was at a time where I was really struggling with my acting career. And I wasn't certain if it was going to last much longer, if I was going to be able to keep doing it. ",
+        "ref_text": "I had done some indie films and plenty of commercials. And you look at all that and you go, oh, I was working. But all of those were kind of like once a year. ",
         "ref_wav_calm": "shayne_topp_calm_ref.wav",
-        "ref_text_calm": "And it was interesting because it was at a time where I was really struggling with my acting career. And I wasn't certain if it was going to last much longer, if I was going to be able to keep doing it. ",
+        "ref_text_calm": "I had done some indie films and plenty of commercials. And you look at all that and you go, oh, I was working. But all of those were kind of like once a year. ",
         "ref_wav_hype": "shayne_topp_hype_ref.wav",
-        "ref_text_hype": "Every now and then as I'm scrolling through Reddit, I will find a crazy story. I'll send it their way, be like, hey, we should read this sometime. ",
-        "base_speed": 0.95,
-        "base_speed_calm": 0.92,
+        "ref_text_hype": "And our videos aren't just like chill videos. We're not doing ASMR. ",
+        "ref_wav_alt": "shayne_topp_ref2.wav",
+        "ref_text_alt": "I had done some indie films and plenty of commercials. And you look at all that and you go, oh, I was working. But all of those were kind of like once a year. So I moved out to LA officially when I was in 2007. ",
+        "base_speed": 1.0,
+        "base_speed_calm": 1.0,
         "base_speed_hype": 1.0,
         "adaptive": True,
         "nfe_step": 32,
     },
-    "shayne_topp_calm": {
-        "name": "Shayne Topp (Calm)",
-        "desc": "Warm, Chill Narrative (US Male)",
+    "angela_giarratana": {
+        "name": "Angela Giarratana",
+        "desc": "Bright, Expressive & Dynamic (US Female)",
         "lang": "en-us",
-        "ref_wav": "shayne_topp_calm_ref.wav",
-        "ref_text": "And it was interesting because it was at a time where I was really struggling with my acting career. And I wasn't certain if it was going to last much longer, if I was going to be able to keep doing it. ",
-        "base_speed": 0.92,
+        "ref_wav": "angela_giarratana_ref.wav",
+        "ref_text": "I think the reason why I have so much is because I led with the word yes. And I think someone told me that and it was great advice. ",
+        "ref_wav_alt": "angela_giarratana_ref2.wav",
+        "ref_text_alt": "And play characters. But like being myself boldly on camera and just like leading with that or not really having a script or what we're doing and we're just kind of going was very new. To be like a personality is just Angela. ",
+        "base_speed": 1.0,
         "nfe_step": 32,
     },
-    "shayne_topp_hype": {
-        "name": "Shayne Topp (Hype)",
-        "desc": "Boisterous, Animated (US Male)",
+    "amanda_lehan_canto": {
+        "name": "Amanda Lehan-Canto",
+        "desc": "Warm, Animated Storyteller (US Female)",
         "lang": "en-us",
-        "ref_wav": "shayne_topp_hype_ref.wav",
-        "ref_text": "Every now and then as I'm scrolling through Reddit, I will find a crazy story. I'll send it their way, be like, hey, we should read this sometime. ",
+        "ref_wav": "amanda_lehan_canto_ref.wav",
+        "ref_text": "I've always been good with like conversation and talking and telling stories like it's always been my favorite thing. And so I just kind of did that. ",
+        "ref_wav_alt": "amanda_lehan_canto_ref2.wav",
+        "ref_text_alt": "It was the coolest thing to be on stage and just quiet everything and hear it, hear the thought, observe it, say it, and have it actually land and work. ",
         "base_speed": 1.0,
         "nfe_step": 32,
     },
 }
 
 DEFAULT_CONFIG = {
-    "voice": "morgan_freeman",
+    "voice": "shayne_topp",
     "rate": "+0%",
     "volume": 100,
 }
@@ -314,11 +272,74 @@ def normalize_text_for_speech(raw_text: str) -> str:
 
     # 1. Remove markdown links [anchor](url) -> anchor
     text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-    # 2. Strip code blocks and inline formatting (*, _, ~, `)
+    # 2. Strip code blocks
     text = re.sub(r"```[\s\S]*?```", "", text)
-    text = re.sub(r"[*_~`]+", "", text)
 
-    # 3. Currency expansion
+    # 3. Demangle snake_case identifiers (first_sample -> first sample, 100ms_rms -> 100ms rms)
+    text = text.replace("_", " ")
+
+    # 4. Compound and SI units attached to numbers (before CamelCase splitting so MeV/GeV stay intact)
+    compound_units = [
+        (r"(\b\d+(?:\.\d+)?)\s*m/s(?:\^2|²)\b", r"\1 meters per second squared"),
+        (r"(\b\d+(?:\.\d+)?)\s*km/s\b", r"\1 kilometers per second"),
+        (r"(\b\d+(?:\.\d+)?)\s*m/s\b", r"\1 meters per second"),
+        (r"(\b\d+(?:\.\d+)?)\s*km/h\b", r"\1 kilometers per hour"),
+    ]
+    for pat, rep in compound_units:
+        text = re.sub(pat, rep, text)
+    # Particle-physics energy-mass units (eV/c2, MeV/c2, GeV/c2, eV/c) and standalone units
+    ev_scales = [("TeV", "tera electron volts"), ("GeV", "giga electron volts"), ("MeV", "mega electron volts"), ("keV", "kilo electron volts"), ("eV", "electron volts")]
+    for sym, full in ev_scales:
+        text = re.sub(rf"(?:(\b\d+(?:\.\d+)?)\s*|\b){sym}/c(?:\^2|²|2)\b", lambda m, f=full: f"{m.group(1) + ' ' if m.group(1) else ''}{f} per c squared", text)
+        text = re.sub(rf"(?:(\b\d+(?:\.\d+)?)\s*|\b){sym}/c\b", lambda m, f=full: f"{m.group(1) + ' ' if m.group(1) else ''}{f} per c", text)
+        text = re.sub(rf"(?:(\b\d+(?:\.\d+)?)\s*|\b){sym}\b", lambda m, f=full: f"{m.group(1) + ' ' if m.group(1) else ''}{f}", text)
+
+    units = {
+        "ms": "milliseconds", "sec": "seconds", "s": "seconds", "mins": "minutes", "min": "minutes",
+        "hrs": "hours", "hr": "hours", "khz": "kilohertz", "mhz": "megahertz", "ghz": "gigahertz",
+        "hz": "hertz", "kb": "kilobytes", "mb": "megabytes", "gb": "gigabytes", "tb": "terabytes",
+        "px": "pixels", "fps": "frames per second", "db": "decibels", "w": "watts", "kw": "kilowatts",
+        "v": "volts", "mv": "millivolts", "ns": "nanoseconds", "us": "microseconds", "µs": "microseconds",
+        "deg": "degrees", "kg": "kilograms", "km": "kilometers", "cm": "centimeters", "mm": "millimeters",
+        "nm": "nanometers", "μm": "micrometers", "µm": "micrometers",
+    }
+    for u, full in units.items():
+        text = re.sub(rf"(\b\d+(?:\.\d+)?)\s*{u}\b", rf"\1 {full}", text, flags=re.IGNORECASE)
+
+    # 5. Split CamelCase identifiers (firstSample -> first Sample)
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+
+    # 6. Math, code, and comparison operators
+    text = re.sub(r"\s*==\s*", " equals ", text)
+    text = re.sub(r"\s*!=\s*|≠", " does not equal ", text)
+    text = re.sub(r"\s*>=\s*|≥", " is greater than or equal to ", text)
+    text = re.sub(r"\s*<=\s*|≤", " is less than or equal to ", text)
+    text = re.sub(r"\s*≈\s*", " is approximately ", text)
+    text = re.sub(r"\+\/\-|\+\-|±", " plus or minus ", text)
+    text = re.sub(r"\s*->\s*|\s*=>\s*", " leads to ", text)
+
+    # Superscripts & powers (e.g. E = mc^2, a² + b² = c², x^3, x^n)
+    text = re.sub(r"\^2|²", " squared", text)
+    text = re.sub(r"\^3|³", " cubed", text)
+    text = re.sub(r"\^(\d+)", r" to the power of \1", text)
+    # Digits following variables directly (e.g. 'a2 + b2 = c2' or 'mc2' in plain text Wikipedia extracts)
+    text = re.sub(r"(?<=[a-zA-Z])2\b", " squared", text)
+    text = re.sub(r"(?<=[a-zA-Z])3\b", " cubed", text)
+
+    text = re.sub(r"\s*=\s*", " equals ", text)
+
+    # Arithmetic operators (+, -, *, /) between identifiers/numbers
+    text = re.sub(r"(?<=\w)\s*\+\s*(?=\w)", " plus ", text)
+    text = re.sub(r"(?<=\w)\s*[\*×]\s*(?=\w)", " times ", text)
+    text = re.sub(r"(?<=\w)\s+-\s+(?=\w)", " minus ", text)
+    text = re.sub(r"(?<=\d)\s*-\s*(?=\d)", " minus ", text)
+    text = re.sub(r"(?<=\b[a-zA-Z0-9])\s*[\/÷]\s*(?=[a-zA-Z0-9]\b)", " over ", text)
+
+    # Space out multi-letter variable products (e.g. 'mc squared' -> 'm c squared')
+    text = re.sub(r"\b([a-zA-Z])([a-zA-Z])\s+squared\b", r"\1 \2 squared", text)
+    text = re.sub(r"\b([a-zA-Z])([a-zA-Z])\s+cubed\b", r"\1 \2 cubed", text)
+
+    # 7. Currency expansion
     def repl_dollars(m):
         try:
             val = int(m.group(1).replace(",", "").split(".")[0])
@@ -333,7 +354,7 @@ def normalize_text_for_speech(raw_text: str) -> str:
 
     text = re.sub(r"\$([0-9,]+(?:\.[0-9]+)?)", repl_dollars, text)
 
-    # 4. Percentage
+    # 8. Percentage
     def repl_percent(m):
         try:
             val = int(m.group(1).replace(",", "").split(".")[0])
@@ -343,7 +364,22 @@ def normalize_text_for_speech(raw_text: str) -> str:
 
     text = re.sub(r"([0-9]+(?:\.[0-9]+)?)\s*%", repl_percent, text)
 
-    # 5. Ordinals (1st, 2nd, 3rd, 4th...)
+    # 9. Decimals (e.g. 0.00000 -> zero point zero, 3.14 -> three point one four)
+    def repl_decimal(m):
+        whole_str, frac_str = m.group(1), m.group(2)
+        try:
+            w_val = int(whole_str)
+            w_words = _int_to_words(w_val)
+            if set(frac_str) == {"0"}:
+                return f"{w_words} point zero"
+            frac_words = " ".join("zero" if d == "0" else _ONES[int(d)] for d in frac_str)
+            return f"{w_words} point {frac_words}"
+        except Exception:
+            return m.group(0)
+
+    text = re.sub(r"\b(\d+)\.(\d+)\b", repl_decimal, text)
+
+    # 10. Ordinals (1st, 2nd, 3rd, 4th...)
     def repl_ordinal(m):
         try:
             return _int_to_ordinal(int(m.group(1)))
@@ -352,7 +388,7 @@ def normalize_text_for_speech(raw_text: str) -> str:
 
     text = re.sub(r"\b([0-9]+)(?:st|nd|rd|th)\b", repl_ordinal, text, flags=re.IGNORECASE)
 
-    # 6. Common abbreviations
+    # 11. Common abbreviations
     abbrevs = {
         r"\be\.g\.,?": "for example,",
         r"\bi\.e\.,?": "that is,",
@@ -364,11 +400,73 @@ def normalize_text_for_speech(raw_text: str) -> str:
         r"\bMs\b\.": "Miz",
         r"\bProf\b\.": "Professor",
         r"\bapprox\b\.": "approximately",
+        r"\bconfig\b": "configuration",
+        r"\bparams?\b": "parameters",
+        r"\bargs?\b": "arguments",
+        r"\bfuncs?\b": "function",
+        r"\bdest\b": "destination",
+        r"\bsrc\b": "source",
     }
     for pat, rep in abbrevs.items():
         text = re.sub(pat, rep, text, flags=re.IGNORECASE)
 
-    # 7. Convert numbers to words (e.g. 1993, 4500)
+    # Strip trailing periods from single capitalized initials (e.g. "Dwight D. Eisenhower" -> "Dwight D Eisenhower")
+    text = re.sub(r"\bU\.S\.", "you ess", text)
+    text = re.sub(r"\bU\.K\.", "you kay", text)
+    text = re.sub(r"\b([A-Z])\.\s+(?=[A-Z])", r"\1 ", text)
+
+    # 12. Common Acronyms and Technical Initialisms (phonetic words for F5-TTS duration & vowel continuity)
+    _LETTER_PHONETICS = {
+        "A": "ay", "B": "bee", "C": "see", "D": "dee", "E": "ee", "F": "eff",
+        "G": "jee", "H": "aitch", "I": "eye", "J": "jay", "K": "kay", "L": "el",
+        "M": "em", "N": "en", "O": "oh", "P": "pee", "Q": "cue", "R": "are",
+        "S": "ess", "T": "tee", "U": "you", "V": "vee", "W": "double you",
+        "X": "ex", "Y": "why", "Z": "zee",
+    }
+    acronyms_ci = {
+        "rms": "are em ess", "asr": "ay ess are", "tts": "tee tee ess", "dac": "dee ay see",
+        "pcm": "pee see em", "ipc": "eye pee see", "api": "ay pee eye", "sdk": "ess dee kay",
+        "url": "you are el", "uri": "you are eye", "gpu": "jee pee you", "cpu": "see pee you",
+        "vram": "vee ram", "cli": "see el eye", "gui": "jee you eye", "pid": "pee eye dee",
+        "pdf": "pee dee eff", "html": "aitch tee em el", "css": "see ess ess", "sql": "sequel",
+        "ssh": "ess ess aitch", "ssl": "ess ess el", "tls": "tee el ess", "tcp": "tee see pee",
+        "udp": "you dee pee", "dns": "dee en ess", "http": "aitch tee tee pee",
+        "https": "aitch tee tee pee ess", "json": "jason", "xml": "ex em el",
+        "csv": "see ess vee", "yaml": "yam el", "llm": "el el em", "rvc": "are vee see",
+        "nfe": "en eff ee", "uuid": "you you eye dee", "fft": "eff eff tee",
+        "snr": "ess en are", "bpm": "bee pee em", "wpm": "words per minute",
+        "usb": "you ess bee", "ssd": "ess ess dee", "hdd": "aitch dee dee",
+        "rgb": "are jee bee", "fps": "eff pee ess", "faq": "eff ay cue",
+        "phd": "pee aitch dee", "ceo": "see ee oh", "cto": "see tee oh",
+        "cfo": "see eff oh", "usa": "you ess ay", "fbi": "eff bee eye",
+        "cia": "see eye ay", "nsa": "en ess ay", "nvme": "en vee em ee",
+        "gps": "jee pee ess", "ieee": "eye triple ee",
+    }
+    for acr, rep in acronyms_ci.items():
+        text = re.sub(rf"\b{acr}(s)?\b", lambda m, r=rep: f"{r}{'s' if m.group(1) else ''}", text, flags=re.IGNORECASE)
+
+    # Short 2-3 letter acronyms that collide with lowercase words: match uppercase only
+    acronyms_cs = {
+        "AI": "ay eye", "ML": "em el", "OS": "oh ess", "IO": "eye oh",
+        "IP": "eye pee", "UI": "you eye", "UX": "you ex", "UK": "you kay",
+        "EU": "ee you", "US": "you ess", "ID": "eye dee", "PC": "pee see",
+        "TV": "tee vee", "CD": "see dee", "DVD": "dee vee dee", "IT": "eye tee",
+        "SI": "ess eye", "IOC": "eye oh see", "ESA": "ee ess ay",
+        "AC": "ay see", "DC": "dee see", "UV": "you vee", "IR": "eye are",
+        "RF": "are eff", "LED": "el ee dee", "MRI": "em are eye", "RAM": "ram",
+    }
+    for acr, rep in acronyms_cs.items():
+        text = re.sub(rf"\b{acr}(s)?\b", lambda m, r=rep: f"{r}{'s' if m.group(1) else ''}", text)
+
+    # General fallback: any remaining 2-6 char all-caps token with NO vowels (e.g. CGPM, GNSS, ICBM)
+    def repl_unvowel_acronym(m):
+        tok, pl = m.group(1), m.group(2) or ""
+        spelled = " ".join(_LETTER_PHONETICS[c] for c in tok)
+        return f"{spelled}{'s' if pl else ''}"
+
+    text = re.sub(r"\b([BCDFGHJKLMNPQRSTVWXZ]{2,6})(s)?\b", repl_unvowel_acronym, text)
+
+    # 13. Convert numbers to words (e.g. 1993, 4500)
     def repl_num(m):
         num_str = m.group(0).replace(",", "")
         try:
@@ -381,17 +479,21 @@ def normalize_text_for_speech(raw_text: str) -> str:
 
     text = re.sub(r"\b\d{1,3}(?:,\d{3})+\b|\b\d+\b", repl_num, text)
 
-    # 8. Symbols
+    # 14. Symbols
     text = text.replace("&", " and ").replace("@", " at ").replace("/", " or ")
 
-    # 9. Normalize dashes and ellipses to natural pauses
+    # 15. Normalize dashes, ellipses, parentheses, brackets
+    text = re.sub(r"(?<=\w)–(?=\w)", "-", text)
     text = re.sub(r"[—–]", ", ", text)
-    text = re.sub(r"\.{2,}", "... ", text)
-
-    # 10. Strip surrounding quotes so words aren't truncated or lost
+    text = re.sub(r"\.{3,}|…", ", and so on. ", text)
+    text = re.sub(r"\s*\(\s*([^)]{1,45})\s*\)\s*", r", \1, ", text)
+    text = re.sub(r"[\(\)\[\]\{\}<>]+", " ", text)
+    text = re.sub(r"[*_~`]+", "", text)
     text = re.sub(r"[\"“”'‘’]", "", text)
+    text = re.sub(r",\s*,+", ",", text)
+    text = re.sub(r",\s*([.!?;:])", r"\1", text)
 
-    # 11. Normalize spacing
+    # 16. Normalize spacing
     text = re.sub(r"[ \t]+", " ", text).strip()
     return text
 
@@ -482,7 +584,10 @@ def load_config() -> dict:
             voice = data.get("voice", DEFAULT_CONFIG["voice"])
             changed = False
             if voice not in VOICES:
-                voice = DEFAULT_CONFIG["voice"]
+                if str(voice).startswith("shayne_topp"):
+                    voice = "shayne_topp"
+                else:
+                    voice = DEFAULT_CONFIG["voice"]
                 changed = True
             rate = data.get("rate", DEFAULT_CONFIG["rate"])
             if not re.match(r"^[+-]\d+%$", str(rate)):
@@ -762,12 +867,9 @@ def get_selected_text() -> str:
     return ""
 
 
-def rate_to_speed(rate: str) -> float:
-    m = re.match(r"^([+-]?\d+)%$", str(rate).strip())
-    if not m:
-        return 1.0
-    pct = int(m.group(1))
-    return max(0.5, min(2.0, 1.0 + (pct / 100.0)))
+def rate_to_speed(rate: str = "+0%") -> float:
+    # All voices play exclusively at authentic natural speaker speed
+    return 1.0
 
 
 def _daemon_is_ready() -> bool:
@@ -791,15 +893,14 @@ def ensure_daemon_running(show_notifications: bool = True) -> bool:
     if (
         not VENV_PYTHON.exists()
         or not F5_CKPT_FILE.exists()
-        or not (RVC_DIR / "morgan_freeman" / VOICES["morgan_freeman"]["pth_name"]).exists()
     ):
         if show_notifications:
-            notify("Selective Reading", "Setting up F5-TTS + RVC v2 celebrity models…")
+            notify("Selective Reading", "Setting up F5-TTS voice engine…")
         setup_environment(show_notifications=show_notifications)
 
     if get_running_pid(DAEMON_PID_FILE) is None:
         if show_notifications:
-            notify("Selective Reading", "Warming up GPU F5-TTS + RVC v2 voice engine…")
+            notify("Selective Reading", "Warming up GPU F5-TTS voice engine…")
         proc = subprocess.Popen(
             [str(VENV_PYTHON), str(Path(__file__).resolve()), "_daemon"],
             stdin=subprocess.DEVNULL,
@@ -820,8 +921,19 @@ def classify_text_energy(text: str) -> str:
     if "!" in text:
         return "high"
     raw_words = [w.strip(".,;:?!\"'()[]{}") for w in text.split()]
-    upper_words = [w for w in raw_words if len(w) >= 2 and w.isupper() and w.isalpha()]
-    if upper_words:
+    # Only trigger high energy for genuine all-caps shouting (e.g. 3+ consecutive uppercase words or majority all-caps),
+    # never for standalone acronyms like NASA, CERN, or DNA.
+    alpha_words = [w for w in raw_words if len(w) >= 2 and w.isalpha()]
+    upper_count = sum(1 for w in alpha_words if w.isupper())
+    consec_upper = 0
+    max_consec = 0
+    for w in raw_words:
+        if len(w) >= 2 and w.isalpha() and w.isupper():
+            consec_upper += 1
+            max_consec = max(max_consec, consec_upper)
+        else:
+            consec_upper = 0
+    if max_consec >= 3 or (len(alpha_words) >= 3 and upper_count / len(alpha_words) >= 0.6):
         return "high"
     high_energy_keywords = {
         "omg", "wow", "crazy", "insane", "hilarious", "ridiculous",
@@ -834,58 +946,134 @@ def classify_text_energy(text: str) -> str:
     return "low"
 
 
-def _chunk_block_for_f5(block: str) -> list[str]:
+def _chunk_block_for_f5(block: str, max_chars: int = 125) -> list[str]:
+    # Split by true sentence terminators (. ! ?)
     raw_sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", block) if s.strip()]
     if not raw_sentences:
         return [block] if block.strip() else []
 
-    sentences: list[str] = []
-    for s in raw_sentences:
-        if len(s) > 175:
-            clauses = [c.strip() for c in re.split(r"(?<=[;:])\s+", s) if c and c.strip()]
-            if len(clauses) > 1:
-                cur_clause = ""
-                for c in clauses:
-                    if len(cur_clause) + len(c) + 1 <= 140:
-                        cur_clause = f"{cur_clause} {c}".strip() if cur_clause else c
-                    else:
-                        if cur_clause:
-                            sentences.append(_ensure_sentence_end(cur_clause))
-                        cur_clause = c
-                if cur_clause:
-                    sentences.append(_ensure_sentence_end(cur_clause))
+    num_tokens = {
+        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+        "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+        "seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty", "fifty",
+        "sixty", "seventy", "eighty", "ninety", "hundred", "thousand", "million",
+        "billion", "trillion", "point", "plus", "minus", "or", "per", "meters",
+        "kilometers", "seconds", "second", "kilograms", "electron", "volts", "squared", "cubed",
+    }
+    break_words = {"where", "which", "that", "while", "when", "and", "but", "for", "with", "from", "by", "using", "at", "in"}
+
+    def _is_num_tok(w: str) -> bool:
+        clean = w.lower().strip(".,;:!?")
+        if clean in num_tokens:
+            return True
+        if "-" in clean and all(part in num_tokens for part in clean.split("-")):
+            return True
+        return False
+
+    def _split_long_clause(clause: str) -> list[str]:
+        if len(clause) <= max_chars:
+            return [clause]
+        words = clause.split()
+        out: list[str] = []
+        idx = 0
+        while idx < len(words):
+            cur_len = 0
+            best_break = None
+            safe_break = None
+            last_fit = idx + 1
+            for j in range(idx, len(words)):
+                add = len(words[j]) + (1 if j > idx else 0)
+                if cur_len + add > max_chars and j > idx:
+                    break
+                cur_len += add
+                last_fit = j + 1
+                if j > idx:
+                    # Never split inside contiguous number/unit phrases (e.g. "four hundred fifty-eight")
+                    if _is_num_tok(words[j - 1]) and _is_num_tok(words[j]):
+                        continue
+                    if cur_len >= 25:
+                        safe_break = j
+                    w_low = words[j].lower().strip(".,;:!?")
+                    if w_low in break_words and cur_len >= 25:
+                        best_break = j
+                    elif best_break is None and cur_len >= int(max_chars * 0.55):
+                        best_break = j
+            if last_fit == len(words):
+                out.append(" ".join(words[idx:]))
+                break
+            # Prefer semantic break, otherwise safest non-numeric break before falling back to last_fit
+            if best_break is not None and best_break > idx:
+                split_at = best_break
+            elif safe_break is not None and safe_break > idx:
+                split_at = safe_break
             else:
-                sentences.append(_ensure_sentence_end(s))
-        else:
-            sentences.append(_ensure_sentence_end(s))
+                split_at = last_fit
+            out.append(" ".join(words[idx:split_at]))
+            idx = split_at
+        return out
 
     chunks: list[str] = []
-    cur = ""
-    for s in sentences:
-        limit = 140
-        candidate = f"{cur} {s}".strip() if cur else s
-        if len(candidate) <= limit or len(cur) < 30:
-            cur = candidate
-        else:
-            chunks.append(cur)
-            cur = s
-    if cur:
-        chunks.append(cur)
+    for s in raw_sentences:
+        # Keep complete sentences up to max_chars intact so total ref+gen stays well inside F5-TTS's 22s window
+        if len(s) <= max_chars:
+            chunks.append(s)
+            continue
+
+        # For compound sentences > max_chars, split ONLY at true punctuation boundaries (, ; : —)
+        sub_clauses = [c.strip() for c in re.split(r"(?<=[,;:—])\s+", s) if c and c.strip()]
+        if len(sub_clauses) <= 1:
+            chunks.extend(_split_long_clause(s))
+            continue
+
+        # Merge tiny clauses (<= 28 chars, e.g. "In 1983," or parenthetical acronyms) into neighbors
+        merged_subs: list[str] = []
+        for cl in sub_clauses:
+            if merged_subs and len(merged_subs[-1]) <= 28:
+                merged_subs[-1] = f"{merged_subs[-1]} {cl}".strip()
+            elif merged_subs and len(cl) <= 28 and len(merged_subs[-1]) + 1 + len(cl) <= max_chars:
+                merged_subs[-1] = f"{merged_subs[-1]} {cl}".strip()
+            else:
+                merged_subs.append(cl)
+        if len(merged_subs) >= 2 and len(merged_subs[-1]) <= 28:
+            merged_subs[-2] = f"{merged_subs[-2]} {merged_subs[-1]}".strip()
+            merged_subs.pop()
+
+        # Merge sub-clauses up to max_chars so we keep natural clause continuity
+        cur_chunk = ""
+        for clause in merged_subs:
+            candidate = f"{cur_chunk} {clause}".strip() if cur_chunk else clause
+            if len(candidate) <= max_chars:
+                cur_chunk = candidate
+            else:
+                if cur_chunk:
+                    chunks.extend(_split_long_clause(cur_chunk))
+                cur_chunk = clause
+        if cur_chunk:
+            chunks.extend(_split_long_clause(cur_chunk))
+
     return chunks
 
 
 def run_daemon() -> None:
+    import fcntl
     sys.argv = [sys.argv[0]]
     os.environ["HF_HUB_OFFLINE"] = "1"
+    lock_file = Path("/tmp/selective-reading-daemon.lock")
+    lock_fh = lock_file.open("w", encoding="utf-8")
+    try:
+        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return
+
+    my_pid = os.getpid()
+    DAEMON_PID_FILE.write_text(str(my_pid), encoding="utf-8")
+
     import numpy as np
     import torch
     import torchaudio
     from f5_tts.api import F5TTS
     from f5_tts.infer.utils_infer import infer_batch_process
     from inferrvc import RVC
-
-    my_pid = os.getpid()
-    DAEMON_PID_FILE.write_text(str(my_pid), encoding="utf-8")
 
     try:
         DAEMON_SOCKET.unlink(missing_ok=True)
@@ -901,6 +1089,17 @@ def run_daemon() -> None:
     rvc_models: dict[str, RVC | None] = {}
     ref_audios: dict[str, tuple[torch.Tensor, int]] = {}
 
+    def _safe_load_ref(wav_path: Path) -> tuple[torch.Tensor, int]:
+        audio_t, sr = torchaudio.load(str(wav_path))
+        mono = audio_t.mean(dim=0)
+        nz = torch.where(torch.abs(mono) > 0.005)[0]
+        if len(nz) > 0:
+            last_active = int(nz[-1].item()) + 1
+            audio_t = audio_t[:, :last_active]
+        pad_frames = int(sr * 0.18)
+        audio_t = torch.cat([audio_t, torch.zeros((audio_t.shape[0], pad_frames), dtype=audio_t.dtype)], dim=-1)
+        return (audio_t, sr)
+
     for vid, vinfo in VOICES.items():
         if vinfo.get("pth_name"):
             vdir = RVC_DIR / vid
@@ -909,12 +1108,13 @@ def run_daemon() -> None:
             rvc_models[vid] = RVC(model=str(pth_path), index=str(idx_path))
         else:
             rvc_models[vid] = None
-        audio_t, sr = torchaudio.load(str(VOICES_DIR / vinfo["ref_wav"]))
-        ref_audios[vid] = (audio_t, sr)
+        ref_audios[vid] = _safe_load_ref(VOICES_DIR / vinfo["ref_wav"])
         if vinfo.get("ref_wav_calm") and (VOICES_DIR / vinfo["ref_wav_calm"]).exists():
-            ref_audios[f"{vid}_calm"] = torchaudio.load(str(VOICES_DIR / vinfo["ref_wav_calm"]))
+            ref_audios[f"{vid}_calm"] = _safe_load_ref(VOICES_DIR / vinfo["ref_wav_calm"])
         if vinfo.get("ref_wav_hype") and (VOICES_DIR / vinfo["ref_wav_hype"]).exists():
-            ref_audios[f"{vid}_hype"] = torchaudio.load(str(VOICES_DIR / vinfo["ref_wav_hype"]))
+            ref_audios[f"{vid}_hype"] = _safe_load_ref(VOICES_DIR / vinfo["ref_wav_hype"])
+        if vinfo.get("ref_wav_alt") and (VOICES_DIR / vinfo["ref_wav_alt"]).exists():
+            ref_audios[f"{vid}_alt"] = _safe_load_ref(VOICES_DIR / vinfo["ref_wav_alt"])
 
     # Warm up F5-TTS + RMVPE + Hubert + RVC on CUDA so first user keypress starts quickly
     try:
@@ -959,7 +1159,9 @@ def run_daemon() -> None:
         except Exception:
             pass
         try:
-            DAEMON_SOCKET.unlink(missing_ok=True)
+            if DAEMON_PID_FILE.exists() and DAEMON_PID_FILE.read_text(encoding="utf-8").strip() == str(my_pid):
+                DAEMON_SOCKET.unlink(missing_ok=True)
+                DAEMON_PID_FILE.unlink(missing_ok=True)
         except Exception:
             pass
         raise SystemExit(0)
@@ -968,20 +1170,38 @@ def run_daemon() -> None:
     signal.signal(signal.SIGINT, cleanup_and_exit)
 
     def synthesize_and_send(conn: socket.socket, text: str, voice: str) -> None:
-        vinfo = VOICES.get(voice, VOICES[DEFAULT_CONFIG["voice"]])
+        vinfo = VOICES.get(voice)
+        if not vinfo:
+            if str(voice).startswith("shayne_topp"):
+                voice = "shayne_topp"
+            else:
+                voice = DEFAULT_CONFIG["voice"]
+            vinfo = VOICES[voice]
         rvc = rvc_models[voice]
         ref_audio = ref_audios[voice]
         ref_text = vinfo["ref_text"]
+        text = format_text_for_speech(text)
+        if not text:
+            return
         blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
         silence_pcm = np.zeros(int(44100 * 0.40), dtype="<f4").tobytes()
+        breath_silence_pcm = np.zeros(int(44100 * 0.18), dtype="<f4").tobytes()
+        # Pre-roll silence buffer so mpv/pipewire DAC buffer stabilizes without clipping onset
+        lead_silence_pcm = np.zeros(int(44100 * 0.08), dtype="<f4").tobytes()
+        conn.sendall(lead_silence_pcm)
+
         nfe_step = vinfo.get("nfe_step", 32)
         base_speed = vinfo.get("base_speed", 1.0)
+        is_first_chunk = True
+        ref_dur = ref_audio[0].shape[-1] / float(ref_audio[1])
+        ref_cps = len(ref_text.encode("utf-8")) / max(1.0, ref_dur)
+        safe_max_chars = max(80, min(125, int(ref_cps * max(4.5, 19.5 - ref_dur) * base_speed)))
 
         for idx, block in enumerate(blocks):
-            batches = _chunk_block_for_f5(block)
+            batches = _chunk_block_for_f5(block, max_chars=safe_max_chars)
             if not batches:
                 continue
-            for batch in batches:
+            for b_idx, batch in enumerate(batches):
                 cur_ref = ref_audio
                 cur_ref_text = ref_text
                 cur_speed = base_speed
@@ -991,11 +1211,11 @@ def run_daemon() -> None:
                     if energy == "high" and f"{voice}_hype" in ref_audios:
                         cur_ref = ref_audios[f"{voice}_hype"]
                         cur_ref_text = vinfo.get("ref_text_hype", ref_text)
-                        cur_speed = vinfo.get("base_speed_hype", 1.0)
+                        cur_speed = vinfo.get("base_speed_hype", base_speed)
                     elif f"{voice}_calm" in ref_audios:
                         cur_ref = ref_audios[f"{voice}_calm"]
                         cur_ref_text = vinfo.get("ref_text_calm", ref_text)
-                        cur_speed = vinfo.get("base_speed_calm", 0.92)
+                        cur_speed = vinfo.get("base_speed_calm", base_speed)
 
                 for wav_chunk, out_sr in infer_batch_process(
                     cur_ref,
@@ -1031,11 +1251,30 @@ def run_daemon() -> None:
                         resampled = torchaudio.functional.resample(wav_t, out_sr, 44100).squeeze(0)
                         conv_np = resampled.cpu().numpy().astype(np.float32)
 
+                    # Smooth onset micro-fade to eliminate abrupt starts or inter-chunk clicking
+                    if conv_np.size > 0:
+                        if is_first_chunk:
+                            fade_len = min(len(conv_np), int(44100 * 0.025))
+                            fade_curve = 0.5 * (1 - np.cos(np.pi * np.linspace(0, 1, fade_len, dtype=np.float32)))
+                            conv_np[:fade_len] *= fade_curve
+                            is_first_chunk = False
+                        else:
+                            in_len = min(len(conv_np) // 4, int(44100 * 0.005))
+                            if in_len > 0:
+                                conv_np[:in_len] *= np.linspace(0.0, 1.0, in_len, dtype=np.float32)
+                        out_len = min(len(conv_np) // 4, int(44100 * 0.005))
+                        if out_len > 0:
+                            conv_np[-out_len:] *= np.linspace(1.0, 0.0, out_len, dtype=np.float32)
+
                     pk = float(np.max(np.abs(conv_np))) if conv_np.size > 0 else 0.0
                     if pk > 0.90:
                         conv_np = (conv_np / pk) * 0.90
                     pcm = conv_np.astype("<f4").tobytes()
                     conn.sendall(pcm)
+
+                # Natural breath pause between complete sentences within the paragraph
+                if b_idx < len(batches) - 1 and batch.rstrip().endswith((".", "!", "?")):
+                    conn.sendall(breath_silence_pcm)
             if idx < len(blocks) - 1:
                 conn.sendall(silence_pcm)
 
@@ -1080,8 +1319,6 @@ def stream_tts_to_mpv(text: str, voice: str, rate: str, volume: int = 100) -> No
     if not ensure_daemon_running(show_notifications=True):
         raise RuntimeError("GPU RVC v2 daemon failed to start")
 
-    speed = rate_to_speed(rate)
-
     mpv_proc = subprocess.Popen(
         [
             "mpv",
@@ -1093,9 +1330,8 @@ def stream_tts_to_mpv(text: str, voice: str, rate: str, volume: int = 100) -> No
             "--demuxer-rawaudio-rate=44100",
             "--demuxer-rawaudio-channels=1",
             "--demuxer-rawaudio-format=floatle",
-            f"--speed={speed}",
+            "--speed=1.0",
             f"--volume={volume}",
-            "--af=scaletempo2",
             "--cache=yes",
             "--demuxer-max-bytes=100MiB",
             f"--input-ipc-server={MPV_IPC_SOCKET}",
@@ -1334,6 +1570,17 @@ def setup_environment(show_notifications: bool = False) -> None:
     VOICES_DIR.mkdir(parents=True, exist_ok=True)
     RVC_DIR.mkdir(parents=True, exist_ok=True)
 
+    plugin_voices_dirs = [
+        HOME / ".config" / "omarchy" / "plugins" / "raqune.selective-reading" / "voices",
+        HOME / "Projects" / "Omarchy-Plugins" / "plugins" / "raqune.selective-reading" / "voices",
+    ]
+    for pdir in plugin_voices_dirs:
+        if pdir.exists():
+            for wav_f in pdir.glob("*.wav"):
+                dest_f = VOICES_DIR / wav_f.name
+                if not dest_f.exists() or dest_f.stat().st_size != wav_f.stat().st_size:
+                    shutil.copy2(wav_f, dest_f)
+
     # 1. Ensure Python 3.12 GPU venv and F5-TTS + RVC dependencies exist
     if not VENV_PYTHON.exists():
         if show_notifications:
@@ -1533,18 +1780,12 @@ def main() -> None:
     if cmd == "preview":
         cfg = load_config()
         voice = args.voice if args.voice in VOICES else cfg["voice"]
-        if voice == "morgan_freeman":
-            sample = "Hello. I am Morgan Freeman, and I will be narrating your selected text."
-        elif voice == "matthew_mcconaughey":
-            sample = "Alright, alright, alright. I am Matthew McConaughey, and I will be reading whatever you highlight on your screen."
-        elif voice == "shayne_topp":
-            sample = "Welcome back to Reddit stories. Today we have a thoughtful confession, and then, OH MY GOSH, the most insane update you have ever heard!"
-        elif voice == "shayne_topp_calm":
-            sample = "Hello. I am Shayne Topp, reading your selected text with a calm and measured narrative tone."
-        elif voice == "shayne_topp_hype":
-            sample = "LET'S GO! I am Shayne Topp, ready to bring maximum energy to whatever you highlight on screen!"
+        if voice == "angela_giarratana":
+            sample = "Hi! I am Angela Giarratana, and I am super excited to read whatever you highlight on your screen."
+        elif voice == "amanda_lehan_canto":
+            sample = "Hello there! I am Amanda Lehan-Canto, and I will be reading your selected text for you."
         else:
-            sample = "Hello there! I am Stephen Fry, ready to read whatever you highlight on your screen."
+            sample = "Welcome back to Reddit stories. Today we have a thoughtful confession, and then, OH MY GOSH, the most insane update you have ever heard!"
         spawn_reader(sample, voice, cfg["rate"], cfg.get("volume", 100), show_notification=False)
         return
 
@@ -1560,18 +1801,7 @@ def main() -> None:
         return
 
     if cmd == "set-rate":
-        rate_val = args.rate.strip()
-        if not rate_val.startswith(("+", "-")):
-            rate_val = "+" + rate_val
-        if not rate_val.endswith("%"):
-            rate_val += "%"
-        cfg = load_config()
-        cfg["rate"] = rate_val
-        save_config(cfg)
-        if get_running_pid() is not None:
-            _mpv_ipc_command(["set_property", "speed", rate_to_speed(rate_val)])
-        st = load_state()
-        write_state(get_running_pid() is not None, st.get("textSnippet", ""))
+        print("Selective Reading plays at natural speaker speed; speed adjustment is disabled.")
         return
 
     if cmd == "set-volume":
